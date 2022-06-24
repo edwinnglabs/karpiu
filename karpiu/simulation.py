@@ -6,7 +6,7 @@ def make_trend(
     n_steps: int,
     rw_loc: float = 0.0,
     rw_scale: float = 0.1,
-    seed: int = 2022,
+    seed: Optional[int] = None,
 ) -> np.array:
     """Generate time-series trend with different methods.
 
@@ -20,6 +20,8 @@ def make_trend(
         Simulated trend with length equals `series_len`
 
     """
+    if seed is not None:
+        np.random.seed(seed)
     # make trend
     rw = np.random.default_rng(seed).normal(rw_loc, rw_scale, n_steps)
     trend = np.cumsum(rw)
@@ -32,7 +34,7 @@ def make_seasonality(
     seasonality: float,
     order: int = 3,
     scale: float = 0.05,
-    seed: int = 2022,
+    seed: Optional[int] = None,
 ) -> np.array:
     """Generate time-series seasonality with different
 
@@ -54,6 +56,8 @@ def make_seasonality(
       directly derived to preserve the property of the sum of seasonality equals 1.
       2. In case of method = 'fourier', see https://otexts.com/fpp2/complexseasonality.html
     """
+    if seed is not None:
+        np.random.seed(seed)
     if seasonality > 1:
         t = np.arange(0, n_steps)
         out = []
@@ -70,30 +74,63 @@ def make_seasonality(
     return seas
 
 
-def make_regression(
-    n_steps: int,
-    coefs: list[float],
-    loc: float = 0,
-    scale: float = 0.5,
-    cov: Optional[np.array] = None,
-    noise_scale: float = 1.0,
-    bias: float = 0.0,
-    relevance: float = 1.0,
-    sparsity: float = 0.2,
-    seed: int = 2022,
+def make_features(
+    n_obs: int,
+    loc: np.array,
+    scale: np.array,
+    sparsity: float = 0.0,
+    seed: Optional[int] = None,
 ) -> np.array:
-    """Generate regression components
+    """Generate features for data simulation
 
     Args:
-        n_steps: Total length of series
+        n_obs:
+        loc:
+        scale:
+        sparsity: 0 to 1 to control probability (= 1 - sparsity) at time t of a regressor value > 0
+        seed:
+
+    Returns:
+        simulated data 2-D array
+    """
+    if (len(loc.shape) > 2) or (len(scale.shape) > 2):
+        raise Exception("Dimension error for loc or scale.")
+
+    if len(loc) != len(scale):
+        raise Exception("loc and scale length not equal.")
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    n_feat = len(loc)
+
+    # broadcast
+    x = np.random.normal(loc.reshape(1, -1), scale.reshape(1, -1), size=(n_obs, n_feat))
+
+    # control probability of regression kick-in
+    if (sparsity > 0.0) and (sparsity < 1.0):
+        z = np.random.binomial(1, 1 - sparsity, n_obs * n_feat).reshape(n_obs, -1)
+        x = x * z
+
+    return x
+
+
+def make_regression(
+    x: np.array,
+    coefs: np.array,
+    bias: float = 0.0,
+    noise_scale: float = 1.0,
+    relevance: float = 1.0,
+    seed: Optional[int] = None,
+) -> np.array:
+    """Generate regression components for paid marketing
+
+    Args:
+        x: regressors / features values; first dimension represents observations
         coefs: Values used as regression coefficients
-        loc: Location parameter to generate regressor values
-        scale: Scale parameter to generate regressor values
-        cov: Covariance of regressors; need to be positive definite
         noise_scale:  Scale parameter in the white noise generation process
         bias: bias or intercept of the regression component; if None, bias is set to zero.
         relevance: 0 to 1; smaller value indicates smaller total number of useful regressor
-        sparsity: 0 to 1 to control probability (= 1 - sparsity) at time t of a regressor value > 0
         seed: Seed passed into `np.random.default_rng()`
 
     Returns
@@ -102,38 +139,26 @@ def make_regression(
         coefs: Coefficients modified in the process due to sparsity; if sparsity=0,
         it should be identical to coefs input by user
     """
+    if len(x.shape) != 2:
+        raise Exception("x must be a 2-dimensions array.")
 
-    num_of_regressors = len(coefs)
+    n_obs, num_of_regressors = x.shape
+
+    if seed is not None:
+        np.random.seed(seed)
+
     if (relevance > 0.0) and (relevance < 1.0):
         num_of_irr_coefs = int(num_of_regressors * (1 - relevance))
         coefs = np.copy(coefs)
         irr_idx = np.random.choice(num_of_regressors, num_of_irr_coefs, replace=False)
         coefs[irr_idx] = 0.0
 
-    if cov is None:
-        x = (
-            np.random.default_rng(seed)
-            .normal(loc, scale, n_steps * num_of_regressors)
-            .reshape(n_steps, -1)
-        )
-    else:
-        x = np.random.default_rng(seed).multivariate_normal(
-            np.array([loc] * num_of_regressors, dtype=np.float64), cov, n_steps
-        )
-    # control probability of regression kick-in
-    if (sparsity > 0.0) and (sparsity < 1.0):
-        z = (
-            np.random.default_rng(seed)
-            .binomial(1, 1 - sparsity, n_steps * num_of_regressors)
-            .reshape(n_steps, -1)
-        )
-        x = x * z
+    noise = np.random.normal(0, noise_scale, n_obs)
 
-    noise = np.random.default_rng(seed).normal(0, noise_scale, n_steps)
     # make observed response
     if bias:
         y = bias + np.matmul(x, coefs) + noise
     else:
         y = np.matmul(x, coefs) + noise
 
-    return x, y, coefs
+    return y
