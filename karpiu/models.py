@@ -2,15 +2,9 @@ import numpy as np
 import pandas as pd
 from copy import deepcopy
 import logging
+from typing import Dict, List
 
-import statsmodels.api as sm
-import matplotlib.pyplot as plt
-from scipy import stats
 
-from statsmodels.tsa.stattools import adfuller
-from statsmodels.stats.stattools import durbin_watson
-
-import arviz as az
 from orbit.models import DLT
 from orbit.utils.features import make_fourier_series_df
 from orbit.utils.params_tuning import grid_search_orbit
@@ -20,14 +14,35 @@ from .utils import adstock_process, non_zero_quantile
 logger = logging.getLogger("karpiu-mmm")
 
 
-class OneStageModel(object):
-    # TODO: add doc string here
-    """
+class MMM(object):
+    """The core class of building a MMM
+
+    Attributes:
+        WIP
     """
 
-    def __init__(self, kpi_col, date_col, spend_cols, adstock_df,
-                 control_feat_cols=[], event_cols=[], fs_order=0, **kwargs):
-
+    def __init__(
+            self,
+            kpi_col: str,
+            date_col: str,
+            spend_cols: List[str],
+            adstock_df: pd.DataFrame,
+            control_feat_cols: List[str] = [],
+            event_cols: List[str] = [],
+            fs_order: int = 0,
+            **kwargs
+    ):
+        """
+        Args:
+            kpi_col: kpi column
+            date_col: date column
+            spend_cols: columns indicate the channel investment
+            adstock_df: dataframe in a specific format describing the adstock
+            control_feat_cols: optional; features for control
+            event_cols: optional; events to include for time-series forecast
+            fs_order: orders of fourier terms; used in seasonality
+            **kwargs:
+        """
         logger.info("Initialize model")
         self.kpi_col = kpi_col
         self.date_col = date_col
@@ -88,8 +103,9 @@ class OneStageModel(object):
             regressor_col=regressor_cols,
             regressor_sigma_prior=[10.0] * len(regressor_cols),
             date_col=self.date_col,
-            estimator='stan-mcmc', #estimator='stan-map',
-            # just a dummy to do early fitting of event
+            # uses mcmc for high dimensional features selection
+            estimator='stan-mcmc',
+            # a safe setting for fast regression
             level_sm_input=0.01,
             slope_sm_input=0.01,
             num_warmup=4000,
@@ -111,7 +127,11 @@ class OneStageModel(object):
         logger.info("Full features: {}".format(self.full_event_cols + self.full_control_feat_cols))
         logger.info("Selected features: {}".format(self.event_cols + self.control_feat_cols))
 
-    def optim_hyper_params(self, df, **kwargs):
+    def optim_hyper_params(
+            self,
+            df,
+            **kwargs
+    ) -> None:
         logger.info("Optimize smoothing params. Only events and seasonality are involved.")
         transform_df = df.copy()
         logger.info("Pre-process data.")
@@ -121,20 +141,10 @@ class OneStageModel(object):
                 transform_df, period=365.25, order=self.fs_order
             )
 
-        # TODO: 
-        # revisit this later, optimizing level smoothing yields better long-term results
-        # leaving level smoothing to be trained later yields better result in avoiding auto-correlation
-        # after all, it seems auto-correlation is a more severe problem. 
-        # so let's optimize slope and seasonality smoothing only and train level smoothing in final fitting process
+        # some choices for hyper-parameters gird search
         param_grid = {
-            # "level_sm_input": list(np.exp(np.linspace(-6.5, 0, 20))),
-            # 5 steps per each param should be reasonably enough
-            # in general we don't want the smoothing param too big
-            # that makes the state memoryless and loss forestability
-            # "level_sm_input": list(np.exp(np.linspace(-6.5, -0.1, 5))),
             "slope_sm_input": list(np.exp(np.linspace(-6.5, -1, 5))),
             "seasonality_sm_input": list(np.exp(np.linspace(-6.5, -1, 5))),
-            # short and long term memory
             "damped_factor": [0.7, 0.8, 0.95],
         }
 
@@ -150,6 +160,7 @@ class OneStageModel(object):
             # 4 weeks
             forecast_horizon=28,
             estimator='stan-map',
+            verbose=False,
             **kwargs,
         )
 
@@ -160,6 +171,7 @@ class OneStageModel(object):
             eval_method="bic",
             # this does not matter
             forecast_len=28,
+            verbose=False,
         )
 
         # you might end up multiple params; just pick the first set
@@ -170,19 +182,31 @@ class OneStageModel(object):
         for k, v in self.best_params.items():
             logger.info("Best params {} set as {}".format(k, v))
 
-    def set_hyper_params(self, params):
+    def set_hyper_params(
+            self,
+            params: Dict[str, List]
+    ) -> None:
         logger.info("Set hyper-parameters.")
         self.best_params.update(params)
         for k, v in self.best_params.items():
             logger.info("Best params {} set as {}".format(k, v))
 
-    def derive_saturation(self, df):
+    def _derive_saturation(
+            self,
+            df: pd.DataFrame
+    ) -> None:
         self.saturation_df = (
             df[self.spend_cols].apply(non_zero_quantile).reset_index()
         ).rename(columns={'index': 'regressor', 0: 'saturation'})
         self.saturation_df = self.saturation_df.set_index('regressor')
 
-    def fit(self, df, extra_priors=None, **kwargs):
+    def fit(
+            self,
+            df,
+            extra_priors=None,
+            **kwargs
+    ) -> None:
+
         logger.info("Fit final model.")
         self.raw_df = df.copy()
         transform_df = df.copy()
@@ -190,7 +214,7 @@ class OneStageModel(object):
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
         transform_df[self.control_feat_cols] = np.log(transform_df[self.control_feat_cols])
 
-        self.derive_saturation(transform_df)
+        self._derive_saturation(transform_df)
         sat_array = self.saturation_df['saturation'].values
 
         # transformed data-frame would lose first n(=adstock size) observations due to adstock process
@@ -252,7 +276,11 @@ class OneStageModel(object):
         # self._model.fit(transform_df)
         self._model.fit(transform_df, point_method='median')
 
-    def predict(self, df, **kwargs):
+    def predict(
+            self,
+            df: pd.DataFrame,
+            **kwargs
+    ) -> pd.DataFrame:
         # TODO: can make transformation a module
         transform_df = df.copy()
         sat_array = self.saturation_df['saturation'].values
@@ -281,23 +309,21 @@ class OneStageModel(object):
 
         pred = self._model.predict(transform_df, **kwargs)
         pred_tr_col = [x for x in ['prediction_5', 'prediction', 'prediction_95'] if x in pred.columns]
-        # TODO: transform trend as well if we do decompose
         pred[pred_tr_col] = pred[pred_tr_col].apply(np.exp)
-        # pred[pred_tr_col] = pred[pred_tr_col].apply(np.expm1).apply(np.clip, a_min=0, a_max=np.inf)
 
         return pred
 
-    def get_regressors(self, exclude_fs_cols=True):
+    def get_regressors(
+            self,
+            exclude_fs_cols: bool = True
+    ) -> List[str]:
         """Return all regressors used in the model including fourier-series terms (optional), spend etc.
 
-        Parameters
-        ----------
-        exclude_fs_cols : bool
-            whether to return list including fourier-series columns 
+        Args:
+            exclude_fs_cols : whether to return list including fourier-series columns
 
-        Returns
-        -------
-        list
+        Returns:
+            list of regressors of the model
 
         """
         if exclude_fs_cols:
@@ -325,12 +351,24 @@ class OneStageModel(object):
         adstock_matrix = self.get_adstock_matrix()
         return adstock_matrix.shape[1] - 1
 
-    def get_coef_matrix(self, regressors, date_array=None):
-        """Right now we ignore date_array since this is static coef. model"""
+    def get_coef_matrix(
+            self,
+            regressors: np.array,
+            date_array: np.array,
+    ) -> np.array:
+        """Right now we ignore date_array since this is static coef. model
+        Args:
+            regressors: array of strings of regressors labels to return the coefficient matrix
+            date_array: user supplied date array for the regressors; right now this is dummy and just used for
+            determining the output array length
+
+        Returns:
+            coffeicient matrix
+        """
+
         coef_df = self._model.get_regression_coefs()
         coef_df = coef_df.set_index('regressor')
         coef_array = coef_df.loc[regressors, 'coefficient'].values
-        # coef_array = coef_array.reshape(1, -1)
         coef_array = np.tile(coef_array, (len(date_array), 1))
         return coef_array
 
@@ -339,65 +377,7 @@ class OneStageModel(object):
         return deepcopy(self.saturation_df)
 
 
-def check_convergence(model):
-    posetriors = model._model.get_posterior_samples(relabel=True, permute=False)
-    spend_cols = model.get_spend_cols()
-
-    az.style.use('arviz-darkgrid')
-    az.plot_trace(
-        posetriors,
-        var_names=spend_cols,
-        chain_prop={"color": ['r', 'b', 'g', 'y']},
-        # figsize=(len(spend_cols), 30),
-    )
 
 
-# diagnostic tools
-def check_residuals(model):
-    # TODO:
-    # assert model instance is the one stage model
-
-    max_adstock = model.get_max_adstock()
-    df = model.raw_df.copy()
-    pred = model.predict(df, decompose=False)
-    # degree of freedom param
-    resid_dof = model._model.get_point_posteriors()['median']['nu']
-
-    # skip the non-settlement period due to adstock
-    residuals = np.log(df['signups'].values[max_adstock:]) - np.log(pred['prediction'].values)
-
-    fig, axes = plt.subplots(3, 2, figsize=(16, 18))
-    axes[0, 0].plot(df['dt'].values[max_adstock:], residuals, 'o', markersize=2)
-    axes[0, 0].set_title('residuals vs. time')
-    axes[0, 1].hist(residuals, bins=25, edgecolor='black')
-    axes[0, 1].set_title('residuals hist')
-    axes[1, 0].plot(np.log(pred['prediction'].values), residuals, 'o', markersize=2)
-    axes[1, 0].set_title('residuals vs. fitted')
-    # t-dist qq-plot
-    _ = stats.probplot(residuals, dist=stats.t, sparams=resid_dof, plot=axes[1, 1])
-    # auto-correlations
-    sm.graphics.tsa.plot_acf(residuals, lags=30, ax=axes[2, 0])
-    sm.graphics.tsa.plot_pacf(residuals, lags=30, ax=axes[2, 1], method='ywm')
-
-    fig.tight_layout();
 
 
-def check_stationarity(model):
-    # 1. Run [Augmented Dicker-Fuller test](https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test), 
-    # it needs to reject the null which means unit root is not present.
-    # 2. Check [Durbin-Watson Stat](https://en.wikipedia.org/wiki/Durbin%E2%80%93Watson_statistic), 
-    # the closer to `2`, the better.
-
-    # TODO:
-    # assert model instance is the one stage model
-    max_adstock = model.get_max_adstock()
-    df = model.raw_df.copy()
-    pred = model.predict(df, decompose=False)
-    # skip the non-settlement period due to adstock
-    residuals = np.log(df['signups'].values[max_adstock:]) - np.log(pred['prediction'].values)
-
-    adfuller_pval = adfuller(residuals)[1]
-    print("Adfuller Test P-Val: {:.3f} Recommended Values:(x <= 0.05)".format(adfuller_pval))
-
-    dw_stat = durbin_watson(residuals)
-    print("Durbin-Watson Stat: {:.3f} Recommended Values:(|x - 2|>=1.0".format(dw_stat))
