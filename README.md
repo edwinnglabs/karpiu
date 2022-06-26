@@ -5,7 +5,7 @@
 # Installation
 
 ```bash
-$ pip install --upgrade git@github.com:edwinnglabs/karpiu.git
+$ pip install --upgrade git+https://github.com/edwinnglabs/karpiu.git
 ```
 
 # Quick Start
