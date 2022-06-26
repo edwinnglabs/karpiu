@@ -1,6 +1,6 @@
 # Karpiu
 
-**Karpiu** is a package designed for marketing mix modeling by calling [Orbit](https://github.com/uber/orbit) from the backend. 
+**Karpiu** is a package designed for marketing mix modeling by calling [Orbit](https://github.com/uber/orbit) from the backend. Karpiu is still in its beta version.  Please use it at your own risk.
 
 
 # Quick Start
