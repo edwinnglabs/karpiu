@@ -11,8 +11,9 @@ WIP
 
 # Related Work
 
-WIP
+1. [Roby](https://github.com/facebookexperimental/Robyn) - Robyn is an automated Marketing Mix Modeling (MMM) code. It aims to reduce human bias by means of ridge regression and evolutionary algorithms, enables actionable decision making providing a budget allocator and diminishing returns curves and allows ground-truth calibration to account for causation.
 
+2. [lightweight_mmm](https://github.com/google/lightweight_mmm) - LMMM is a python library that helps organisations understand and optimise marketing spend across media channels.
 
 # Fun Fact
 
