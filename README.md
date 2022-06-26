@@ -76,6 +76,9 @@ fig.tight_layout();
 
 - [Are Marketing Mix Models Useful? I Spent My Own Money To Find Out](https://forecastegy.com/posts/marketing-mix-models/) by Mario Filho.
 - [How Google LightweightMMM Works](https://getrecast.com/google-lightweightmmm/) by Mike Taylor.
+- [
+Bayesian Media Mix Modeling for Marketing Optimization](https://www.pymc-labs.io/blog-posts/bayesian-media-mix-modeling-for-marketing-optimization/)
+by Benjamin Vincent.
 
 # Fun Fact
 
