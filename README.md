@@ -2,6 +2,14 @@
 
 **Karpiu** is a package designed for marketing mix modeling by calling [Orbit](https://github.com/uber/orbit) from the backend. Karpiu is still in its beta version.  Please use it at your own risk.
 
+# Installation
+
+You need both `karpiu` and `orbit-ml` installed from dev branch
+
+```bash
+$ pip install --upgrade git+https://github.com/edwinnglabs/karpiu.git
+$ pip install --upgrade git+https://github.com/uber/orbit.git
+```
 
 # Quick Start
 
@@ -76,6 +84,9 @@ fig.tight_layout();
 
 - [Are Marketing Mix Models Useful? I Spent My Own Money To Find Out](https://forecastegy.com/posts/marketing-mix-models/) by Mario Filho.
 - [How Google LightweightMMM Works](https://getrecast.com/google-lightweightmmm/) by Mike Taylor.
+- [
+Bayesian Media Mix Modeling for Marketing Optimization](https://www.pymc-labs.io/blog-posts/bayesian-media-mix-modeling-for-marketing-optimization/)
+by Benjamin Vincent.
 
 # Fun Fact
 
