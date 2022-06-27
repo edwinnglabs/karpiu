@@ -2,10 +2,8 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import fsolve 
 from scipy.stats import mode as scipy_mode
-from scipy.stats import gaussian_kde
 
-
-from explainer import Attributor
+from .explainer import Attributor
 
 
 class PriorSolver(object):

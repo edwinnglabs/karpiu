@@ -2,106 +2,52 @@ import numpy as np
 import pandas as pd
 from copy import deepcopy
 from .utils import adstock_process, np_shift
+from typing import Optional, List, Dict
 
-
-def make_attr(model, df=None, regressors=None, match_actual=True, return_df=False):
-    """ A MVP version that provides decomposition on activities due to spend. However, this approach 
-    only provides calendar date view but not spend date view when there is an adstock in the model. 
-
-    Notes
-    -----
-    1. Propose regressors set $x1, x2, \cdots$ to be explained
-    2. Make baseline prediction with all regressors original values as $y_\text{full}$
-    3. Iterate $x_i$ from $i$ in $1$ to $I$
-    - store the prediction as $y_i$
-    - derive the "one-off" delta as $\delta_i = y_\text{full} - y_i$
-    4. finally, make prediction when all regressors values set to zero and set it as $y_\text{zero}$
-    5. calculate the "all-off" delta as $\delta_0 = y_\text{full} - y_\text{zero} $
-    6. derive the decomposed components including the baseline and regressors $x_i$ by 
-    - derive the normalized weight $w_i = \delta_i / \sum_{i=0}^{i=I}\delta_i$ 
-    - then the final decomposed components can be derived by $\text{comp}_i =  w_i \cdot y_\text{actual}$ 
-
-    Parameters
-    ----------
-    model : object
-    df : pd.DataFrame
-    regressors : list 
-
-    """
-    if not regressors:
-        regressors = model.spend_cols
-
-    if df is None:
-        df = model.raw_df.copy()
-
-    # organice plus all regressors
-    pred_array = np.empty((df.shape[0], len(regressors)))
-    delta_array = np.empty((df.shape[0], len(regressors) + 1))
-    full_pred = model.predict(df)['prediction'].values.reshape(-1, 1)
-
-    for idx, x in enumerate(regressors):
-        temp_df = df.copy()
-        temp_df[x] = 0.0
-        pred_array[:, idx] = model.predict(temp_df)['prediction'].values
-
-    temp_df = df.copy()
-    temp_df[regressors] = 0.0
-    # zero prediction used for organic
-    delta_array[:, 0] = model.predict(temp_df)['prediction'].values
-    delta_array[:, 1:] = full_pred - pred_array
-    total_delta = np.sum(delta_array, axis=1, keepdims=True)
-    assert total_delta.shape[0] == df.shape[0]
-    weight_array = delta_array / total_delta
-
-    if match_actual:
-        target_array = df[model.kpi_col].values.reshape(-1, 1)
-    else:
-        target_array = pred_array.reshape(-1, 1)
-
-    if return_df:
-        res = pd.DataFrame(weight_array * target_array, columns=['organic'] + regressors)
-        res[model.date_col] = df[model.date_col]
-        # re-arrange columns
-        res = res[[model.date_col, 'organic'] + regressors].reset_index(drop=True)
-    else:
-        res = weight_array * target_array
-    return res
+from .models import MMM
 
 
 class Attributor(object):
-    """Define a prototype class to make attribution on state-space model in an object-oriented way
+    """The class to make attribution on a state-space model in an object-oriented way; Algorithm assumes model is
+     with a Karpiu and Orbit structure
 
-
-    Parameters
-    ----------
-    model : object
-        MMM model object
-    start : str
-    end : str
-
-
-    Attributes
-    ----------
-    date_col : str
-    verbose : bool
-    auto_extend : bool
-    attr_start : datetime
-    attr_end : datetime
-    calc_start : datetime
-        the starting datetime required from the input dataframe to support calculation; date is shifted backward 
-    from attr_start according to the maximum adstock introduced 
-    calc_end : datetime 
-        the ending datetime required from the input dataframe to support calculation; date is shifted forward 
-    from attr_end according to the maximum adstock introduced 
-    max_adstock : int
-    all_regressors : list
+    Attributes:
+        date_col : str
+        verbose : bool
+        attr_start : datetime
+        attr_end : datetime
+        calc_start : datetime
+            the starting datetime required from the input dataframe to support calculation; date is shifted backward
+        from attr_start according to the maximum adstock introduced
+        calc_end : datetime
+            the ending datetime required from the input dataframe to support calculation; date is shifted forward
+        from attr_end according to the maximum adstock introduced
+        max_adstock : int
+        full_regressors : list
     """
 
-    def __init__(self, model, start=None, end=None, df=None, kpi_name=None, verbose=False, auto_extend=False):
+    def __init__(
+            self,
+            model: MMM,
+            start: Optional[str] = None,
+            end: Optional[str] = None,
+            df: Optional[pd.DataFrame] = None,
+            kpi_name: Optional[str] = None,
+            verbose: bool = False,
+    ):
+        """
+
+        Args:
+            model:
+            start: attribution start date string; if None, use minimum start date based on model provided
+            end: attribution end date string; if None, use maximum end date based on model provided
+            df: data frame; if None, use original data based on model provided
+            kpi_name: kpi label; if None, use information from model provided
+            verbose: whether to print process information
+        """
+
         self.date_col = model.date_col
         self.verbose = verbose
-        # TODO: figure this out later
-        self.auto_extend = auto_extend
 
         date_col = self.date_col
         self.max_adstock = model.get_max_adstock()
@@ -152,12 +98,6 @@ class Attributor(object):
                 df[date_col].iloc[0], self.calc_start, self.max_adstock))
 
         if self.calc_end > df[date_col].max():
-            #    if self.auto_extend:
-            #        if verbose:
-            #            print("Auto extend data since dataframe provided ends earlier than calculation required.")
-            #        required_ext_len = (self.calc_end - df[date_col].max()).days
-            #        df = extend_model_df(model, extend_length=required_ext_len)
-            #    else:
             raise Exception('Dataframe provided ends at {} must be after {} due to max_adstock={}'.format(
                 df[date_col].iloc[-1], self.calc_end, self.max_adstock))
         # set a business-as-usual case data frame
@@ -269,17 +209,8 @@ class Attributor(object):
         else:
             self.pred_bau = pred_bau
 
-        # print(pred_bau)
-        # print(debug_pred_bau['prediction'].values)
-        # DEBUG: ??
-        # attr_regression dim: time x 1 (sum over regressors)
-        # attr_regression = np.sum(
-        #     coef_matrix * np.log(1 + self.adstock_regressor_matrix / self.saturation_array), -1
-        # )
-        # pred_bau = self.pred_zero * np.exp(attr_regression)
-
-        # a delta matrix with extra dimension (num of attr_regressor) and store the delta at calender date view
-        # so that we do the normalization within each calender date (not spend date)
+        # a delta matrix with extra dimension (num of attr_regressor) and store the delta at calendar date view
+        # so that we do the normalization within each calendar date (not spend date)
         # delta matrix stores the impact on calendar date by each channel spend due to each adstock impact
         # the first channel dimension is added by an extra 1 to include organic
         # note that this channel should not have any adstock effect simply because
@@ -294,7 +225,8 @@ class Attributor(object):
         # a same size of matrix declared to prepare paid date dimension
         paid_on_attr_matrix = np.zeros(delta_matrix.shape)
 
-        # active on can directly take organic as it does not care adstock; hence all impact contribute at first(current) time 
+        # active on can directly take organic as it does not care adstock;
+        # hence all impact contribute at first(current) time
         delta_matrix[:, 0, 0] = self.pred_zero
 
         # loop through the channels
@@ -451,3 +383,68 @@ class Attributor(object):
 #                dummy_filter[0] = 1.0
 #                adstock_matrix_expand[idx, :] = dummy_filter
 #        return adstock_matrix_expand
+
+
+# deprecated
+# def make_attr(model, df=None, regressors=None, match_actual=True, return_df=False):
+#     """ A MVP version that provides decomposition on activities due to spend. However, this approach
+#     only provides calendar date view but not spend date view when there is an adstock in the model.
+#
+#     Notes
+#     -----
+#     1. Propose regressors set $x1, x2, \cdots$ to be explained
+#     2. Make baseline prediction with all regressors original values as $y_\text{full}$
+#     3. Iterate $x_i$ from $i$ in $1$ to $I$
+#     - store the prediction as $y_i$
+#     - derive the "one-off" delta as $\delta_i = y_\text{full} - y_i$
+#     4. finally, make prediction when all regressors values set to zero and set it as $y_\text{zero}$
+#     5. calculate the "all-off" delta as $\delta_0 = y_\text{full} - y_\text{zero} $
+#     6. derive the decomposed components including the baseline and regressors $x_i$ by
+#     - derive the normalized weight $w_i = \delta_i / \sum_{i=0}^{i=I}\delta_i$
+#     - then the final decomposed components can be derived by $\text{comp}_i =  w_i \cdot y_\text{actual}$
+#
+#     Parameters
+#     ----------
+#     model : object
+#     df : pd.DataFrame
+#     regressors : list
+#
+#     """
+#     if not regressors:
+#         regressors = model.spend_cols
+#
+#     if df is None:
+#         df = model.raw_df.copy()
+#
+#     # organice plus all regressors
+#     pred_array = np.empty((df.shape[0], len(regressors)))
+#     delta_array = np.empty((df.shape[0], len(regressors) + 1))
+#     full_pred = model.predict(df)['prediction'].values.reshape(-1, 1)
+#
+#     for idx, x in enumerate(regressors):
+#         temp_df = df.copy()
+#         temp_df[x] = 0.0
+#         pred_array[:, idx] = model.predict(temp_df)['prediction'].values
+#
+#     temp_df = df.copy()
+#     temp_df[regressors] = 0.0
+#     # zero prediction used for organic
+#     delta_array[:, 0] = model.predict(temp_df)['prediction'].values
+#     delta_array[:, 1:] = full_pred - pred_array
+#     total_delta = np.sum(delta_array, axis=1, keepdims=True)
+#     assert total_delta.shape[0] == df.shape[0]
+#     weight_array = delta_array / total_delta
+#
+#     if match_actual:
+#         target_array = df[model.kpi_col].values.reshape(-1, 1)
+#     else:
+#         target_array = pred_array.reshape(-1, 1)
+#
+#     if return_df:
+#         res = pd.DataFrame(weight_array * target_array, columns=['organic'] + regressors)
+#         res[model.date_col] = df[model.date_col]
+#         # re-arrange columns
+#         res = res[[model.date_col, 'organic'] + regressors].reset_index(drop=True)
+#     else:
+#         res = weight_array * target_array
+#     return res

@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 import holidays
 import re
+from itertools import product
 
 
 def non_zero_quantile(x):
@@ -140,3 +141,8 @@ def extend_ts_features(df, n_periods, date_col, rolling_window=30):
     res = pd.concat([df, extended_df])
     return res
 
+
+
+def expand_grid(dictionary):
+    return pd.DataFrame([row for row in product(*dictionary.values())],
+                       columns=dictionary.keys())

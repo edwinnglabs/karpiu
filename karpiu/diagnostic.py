@@ -2,6 +2,7 @@ import numpy as np
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from scipy import stats
+import arviz as az
 
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.stats.stattools import durbin_watson
@@ -36,7 +37,7 @@ def check_residuals(model):
     sm.graphics.tsa.plot_acf(residuals, lags=30, ax=axes[2, 0])
     sm.graphics.tsa.plot_pacf(residuals, lags=30, ax=axes[2, 1], method='ywm')
 
-    fig.tight_layout();
+    fig.tight_layout()
 
 
 def check_stationarity(model):
