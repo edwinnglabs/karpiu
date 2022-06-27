@@ -4,8 +4,11 @@
 
 # Installation
 
+You need both `karpiu` and `orbit-ml` installed from dev branch
+
 ```bash
 $ pip install --upgrade git+https://github.com/edwinnglabs/karpiu.git
+$ pip install --upgrade git+https://github.com/uber/orbit.git
 ```
 
 # Quick Start
