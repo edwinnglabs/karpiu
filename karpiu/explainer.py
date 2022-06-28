@@ -7,15 +7,15 @@ from typing import Optional, List, Dict
 from .models import MMM
 
 
-class Attributor(object):
+class Attributor:
     """The class to make attribution on a state-space model in an object-oriented way; Algorithm assumes model is
      with a Karpiu and Orbit structure
 
     Attributes:
         date_col : str
         verbose : bool
-        attr_start : datetime
-        attr_end : datetime
+        attr_start : attribution start date string; if None, use minimum start date based on model provided
+        attr_end : attribution end date string; if None, use maximum end date based on model provided
         calc_start : datetime
             the starting datetime required from the input dataframe to support calculation; date is shifted backward
         from attr_start according to the maximum adstock introduced
@@ -78,7 +78,7 @@ class Attributor(object):
         if kpi_name is None:
             self.kpi_col = model.kpi_col
         else:
-            self.kpi_col = kpi_col
+            self.kpi_col = kpi_name
 
         self.attr_regressors = model.get_spend_cols()
 
@@ -108,7 +108,7 @@ class Attributor(object):
 
         # prepare a few matrices and arrays for rest of the calculations
         # required matrices and arrays such as saturation, adstock, regressors matrix etc.
-        # just make sure attr_regressors input by user align original all regresors order
+        # just make sure attr_regressors input by user align original all regressors order
         attr_regressors_idx = [
             idx for idx in range(len(self.full_regressors)) if self.full_regressors[idx] in self.attr_regressors
         ]
@@ -130,7 +130,8 @@ class Attributor(object):
             self.adstock_regressor_matrix = adstock_process(
                 self.attr_regressor_matrix, self.adstock_matrix
             )
-            # we lose first n(=max_adstock) observations; to maintain original dimension, we need to pad zeros n(=max_adstock) time
+            # we lose first n(=max_adstock) observations; to maintain original dimension,
+            # we need to pad zeros n(=max_adstock) time
             self.adstock_regressor_matrix = np.concatenate((
                 np.zeros((self.max_adstock, self.adstock_regressor_matrix.shape[1])),
                 self.adstock_regressor_matrix
@@ -147,16 +148,16 @@ class Attributor(object):
         self.df_zero = self.df_bau.copy()
         self.df_zero.loc[:, self.attr_regressors] = 0.0
         # prediction with all predictors turned to zero
-        pred_zero = model.predict(df=self.df_zero)['prediction'].values
+        self.pred_zero = model.predict(df=self.df_zero)['prediction'].values
 
-        # NOTE: this vector has less length (a `max_adstock` shift from the beginning)
-        if self.max_adstock > 0:
-            # pad zeros due to adstock
-            self.pred_zero = np.concatenate((
-                np.zeros(self.max_adstock), pred_zero
-            ))
-        else:
-            self.pred_zero = pred_zero
+        # # NOTE: this vector has less length (a `max_adstock` shift from the beginning)
+        # if self.max_adstock > 0:
+        #     # pad zeros due to adstock
+        #     self.pred_zero = np.concatenate((
+        #         np.zeros(self.max_adstock), pred_zero
+        #     ))
+        # else:
+        #     self.pred_zero = pred_zero
 
         # dependent on the coefficients (can be specified by users in next step)
         self.pred_bau = None
@@ -197,17 +198,15 @@ class Attributor(object):
         # adstock_regressor_matrix dim: time x num of regressors
         # saturation_array dim: 1 x num of regressor
 
-        # FIXME: how come they look different?
-        # FIXME: the difference is small; we can re-examine this later
-        pred_bau = self.model.predict(df_bau)['prediction'].values
-        if self.max_adstock > 0:
-            # pad zeros due to adstock
-            self.pred_bau = np.concatenate((
-                np.zeros(self.max_adstock), pred_bau
-            ))
-
-        else:
-            self.pred_bau = pred_bau
+        self.pred_bau = self.model.predict(df_bau)['prediction'].values
+        # if self.max_adstock > 0:
+        #     # pad zeros due to adstock
+        #     self.pred_bau = np.concatenate((
+        #         np.zeros(self.max_adstock), pred_bau
+        #     ))
+        #
+        # else:
+        #     self.pred_bau = pred_bau
 
         # a delta matrix with extra dimension (num of attr_regressor) and store the delta at calendar date view
         # so that we do the normalization within each calendar date (not spend date)

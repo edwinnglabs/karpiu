@@ -14,7 +14,7 @@ from .utils import adstock_process, non_zero_quantile
 logger = logging.getLogger("karpiu-mmm")
 
 
-class MMM(object):
+class MMM:
     """The core class of building a MMM
 
     Attributes:
@@ -52,6 +52,7 @@ class MMM(object):
         self.control_feat_cols = deepcopy(control_feat_cols)
         self.fs_cols = list()
         self.fs_order = fs_order
+        self.extra_priors = None
 
         # for dual seasonality
         if self.fs_order > 0:
@@ -129,7 +130,7 @@ class MMM(object):
 
     def optim_hyper_params(
             self,
-            df,
+            df: pd.DataFrame,
             **kwargs
     ) -> None:
         logger.info("Optimize smoothing params. Only events and seasonality are involved.")
@@ -180,7 +181,7 @@ class MMM(object):
         self.tuning_df = tuning_df
 
         for k, v in self.best_params.items():
-            logger.info("Best params {} set as {}".format(k, v))
+            logger.info("Best params {} set as {:.5f}".format(k, v))
 
     def set_hyper_params(
             self,
@@ -189,7 +190,7 @@ class MMM(object):
         logger.info("Set hyper-parameters.")
         self.best_params.update(params)
         for k, v in self.best_params.items():
-            logger.info("Best params {} set as {}".format(k, v))
+            logger.info("Best params {} set as {:.5f}".format(k, v))
 
     def _derive_saturation(
             self,
@@ -256,6 +257,7 @@ class MMM(object):
                 logger.info("Updating {} prior".format(test_channel))
                 reg_scheme.loc[test_channel, 'regressor_coef_prior'] = row['coef_prior']
                 reg_scheme.loc[test_channel, 'regressor_sigma_prior'] = row['sigma_prior']
+            self.extra_priors = deepcopy(extra_priors)
 
         self.regression_scheme = reg_scheme
 
@@ -310,6 +312,9 @@ class MMM(object):
         pred = self._model.predict(transform_df, **kwargs)
         pred_tr_col = [x for x in ['prediction_5', 'prediction', 'prediction_95'] if x in pred.columns]
         pred[pred_tr_col] = pred[pred_tr_col].apply(np.exp)
+
+        pred_base = df[[self.date_col]]
+        pred = pd.merge(pred_base, pred, on=[self.date_col], how='left')
 
         return pred
 
@@ -375,6 +380,9 @@ class MMM(object):
     def get_saturation(self):
         # in the same order of spend
         return deepcopy(self.saturation_df)
+
+    def get_extra_priors(self):
+        return deepcopy(self.extra_priors)
 
 
 
