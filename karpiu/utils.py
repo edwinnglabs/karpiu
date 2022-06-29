@@ -7,6 +7,7 @@ from datetime import datetime
 import holidays
 import re
 from itertools import product
+from scipy.stats import mode as scipy_mode
 
 
 def non_zero_quantile(x):
@@ -142,7 +143,15 @@ def extend_ts_features(df, n_periods, date_col, rolling_window=30):
     return res
 
 
-
 def expand_grid(dictionary):
     return pd.DataFrame([row for row in product(*dictionary.values())],
                        columns=dictionary.keys())
+
+
+def generate_posteriors_mode(posteriors, var_names):
+    posteriors_mode = {}
+    for k, v in posteriors.items():
+        if k in var_names:
+            posteriors_mode[k] = scipy_mode(v)[0]
+
+    return posteriors_mode

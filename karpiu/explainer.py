@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 from copy import deepcopy
-from .utils import adstock_process, np_shift
-from typing import Optional, List, Dict
+from typing import Optional
 
+from .utils import adstock_process, np_shift
 from .models import MMM
 
 

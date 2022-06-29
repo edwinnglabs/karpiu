@@ -1,13 +1,11 @@
-import pandas as pd
 import numpy as np
-from scipy.optimize import fsolve 
-from scipy.stats import mode as scipy_mode
-
+from scipy.optimize import fsolve
 from .explainer import Attributor
 
 
-class PriorSolver(object):
+class PriorSolver:
     """Solving Regresion Coefficient Prior from MMM by using Attribution logic"""
+
     def __init__(self, tests_df):
         self.tests_df = tests_df
 
@@ -40,7 +38,7 @@ class PriorSolver(object):
 
             def attr_call_back(x, target):
                 attr_res = attr_obj.make_attribution(
-                    new_coef_name=test_channel, 
+                    new_coef_name=test_channel,
                     new_coef=x,
                 )
                 _, spend_attr_df, _, _ = attr_res
@@ -59,16 +57,11 @@ class PriorSolver(object):
             output_df.loc[idx, 'coef_prior'] = coef_prior
             # since model can be over-confident on empirical result and the non-linear relationship, 
             # introduce a 0.3 haircut on the derive sigma here
-            output_df.loc[idx,'sigma_prior'] = (coef_prior_upper - coef_prior) * 0.3
-            output_df.loc[idx,'test_spend'] = test_spend
-            output_df.loc[idx,'test_lift'] = test_lift
+            output_df.loc[idx, 'sigma_prior'] = (coef_prior_upper - coef_prior) * 0.3
+            output_df.loc[idx, 'test_spend'] = test_spend
+            output_df.loc[idx, 'test_lift'] = test_lift
 
         return output_df
 
-def generate_posteriors_mode(posteriors, var_names):
-    posteriors_mode = {}
-    for k, v in posteriors.items():
-        if k in var_names:
-            posteriors_mode[k] = scipy_mode(v)[0]
 
-    return posteriors_mode
+
