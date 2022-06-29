@@ -15,6 +15,7 @@ class Optimizer:
 
 def generate_cost_curves(
         model: MMM,
+        max_spend: Optional[int] = None,
         spend_df: Optional[pd.DataFrame] = None,
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
@@ -23,6 +24,7 @@ def generate_cost_curves(
 
     Args:
         model:
+        max_spend:
         spend_df:
         spend_start:
         spend_end:
@@ -65,7 +67,10 @@ def generate_cost_curves(
     spend_summmary = spend_df.loc[spend_mask, paid_channels].sum()
     spend_summmary.index = spend_summmary.index.set_names(['channel'])
     spend_summmary = spend_summmary.reset_index(name='total_spend')
-    spend_summmary['max_multiplier'] = np.max(spend_summmary['total_spend']) / spend_summmary['total_spend'] * 1.2
+    if max_spend is not None:
+        spend_summmary['max_multiplier'] = max_spend / spend_summmary['total_spend']
+    else:
+        spend_summmary['max_multiplier'] = np.max(spend_summmary['total_spend']) / spend_summmary['total_spend']
 
     for ch in tqdm(paid_channels):
         # multiplier always contains 1.0
@@ -103,8 +108,14 @@ def plot_cost_curves(
     nrows = math.ceil(n / 2)
     fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=(18, nrows * 2.2))
     axes = axes.flatten()
-    y_min = np.min(cost_curves['total_outcome']) / outcome_scaler * 0.75
-    y_max = np.max(cost_curves['total_outcome']) / outcome_scaler * 1.5
+    y_min = np.min(cost_curves['total_outcome']) / outcome_scaler
+    y_max = np.max(cost_curves['total_outcome']) / outcome_scaler
+
+    if optim_cost_curves is not None:
+        y_min2 = np.min(optim_cost_curves['total_outcome']) / outcome_scaler
+        y_max2 = np.max(optim_cost_curves['total_outcome']) / outcome_scaler
+        y_min = min(y_min, y_min2)
+        y_max = max(y_max, y_max2)
 
     for idx, ch in enumerate(paid_channels):
         temp_cc = cost_curves[cost_curves['ch'] == ch].reset_index(drop=True)
@@ -129,7 +140,7 @@ def plot_cost_curves(
 
         if optim_cost_curves is not None:
             temp_optim_cc = optim_cost_curves[cost_curves['ch'] == ch].reset_index(drop=True)
-            optim_spend_mask = temp_cc['multiplier'] == 1
+            optim_spend_mask = temp_optim_cc['multiplier'] == 1
             axes[idx].plot(
                 temp_optim_cc['total_spend'].values / spend_scaler,
                 temp_optim_cc['total_outcome'].values / outcome_scaler,
@@ -148,13 +159,12 @@ def plot_cost_curves(
                 s=48,
                 label='optim spend',
             )
-
         axes[idx].set_title(ch, fontdict={'fontsize': 18})
         axes[idx].grid(linestyle='--', linewidth=0.5, color='grey', alpha=0.8)
         axes[idx].set_xlabel('spend')
         axes[idx].set_ylabel('signups')
         axes[idx].xaxis.set_major_formatter('${x:1.0f}')
-        axes[idx].set_ylim(y_min, y_max)
+        axes[idx].set_ylim(y_min * 0.95, y_max * 1.025)
 
         # axes[idx].legend(loc='upper left')
     handles, labels = axes[-1].get_legend_handles_labels()
