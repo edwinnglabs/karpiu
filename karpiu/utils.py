@@ -99,7 +99,7 @@ def insert_events(df, date_col, country):
         for dt, name in sorted(us_holidays.items()):
             # clean up the tag for machine-readable format
             name = re.sub(r'[^a-zA-Z0-9 ]', r'', name)
-            name = re.sub('\W+','-', name)
+            name = re.sub('\W+', '-', name)
             name = name.lower()
             dt = pd.to_datetime(datetime.strftime(dt, "%Y-%m-%d"))
             if name in events_dict.keys():
@@ -145,7 +145,7 @@ def extend_ts_features(df, n_periods, date_col, rolling_window=30):
 
 def expand_grid(dictionary):
     return pd.DataFrame([row for row in product(*dictionary.values())],
-                       columns=dictionary.keys())
+                        columns=dictionary.keys())
 
 
 def generate_posteriors_mode(posteriors, var_names):

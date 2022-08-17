@@ -22,20 +22,20 @@ def check_residuals(model):
     resid_dof = model._model.get_point_posteriors()['median']['nu']
 
     # skip the non-settlement period due to adstock
-    residuals = np.log(df['signups'].values[max_adstock:]) - np.log(pred['prediction'].values)
+    resid = np.log(df['signups'].values[max_adstock:]) - np.log(pred['prediction'].values[max_adstock:])
 
     fig, axes = plt.subplots(3, 2, figsize=(16, 18))
-    axes[0, 0].plot(df['dt'].values[max_adstock:], residuals, 'o', markersize=2)
+    axes[0, 0].plot(df['dt'].values[max_adstock:], resid, 'o', markersize=2)
     axes[0, 0].set_title('residuals vs. time')
-    axes[0, 1].hist(residuals, bins=25, edgecolor='black')
+    axes[0, 1].hist(resid, bins=25, edgecolor='black')
     axes[0, 1].set_title('residuals hist')
-    axes[1, 0].plot(np.log(pred['prediction'].values), residuals, 'o', markersize=2)
+    axes[1, 0].plot(np.log(pred['prediction'].values[max_adstock:]), resid, 'o', markersize=2)
     axes[1, 0].set_title('residuals vs. fitted')
     # t-dist qq-plot
-    _ = stats.probplot(residuals, dist=stats.t, sparams=resid_dof, plot=axes[1, 1])
+    _ = stats.probplot(resid, dist=stats.t, sparams=resid_dof, plot=axes[1, 1])
     # auto-correlations
-    sm.graphics.tsa.plot_acf(residuals, lags=30, ax=axes[2, 0])
-    sm.graphics.tsa.plot_pacf(residuals, lags=30, ax=axes[2, 1], method='ywm')
+    sm.graphics.tsa.plot_acf(resid, lags=30, ax=axes[2, 0])
+    sm.graphics.tsa.plot_pacf(resid, lags=30, ax=axes[2, 1], method='ywm')
 
     fig.tight_layout()
 
@@ -52,12 +52,12 @@ def check_stationarity(model):
     df = model.raw_df.copy()
     pred = model.predict(df, decompose=False)
     # skip the non-settlement period due to adstock
-    residuals = np.log(df['signups'].values[max_adstock:]) - np.log(pred['prediction'].values)
+    resid = np.log(df['signups'].values[max_adstock:]) - np.log(pred['prediction'].values[max_adstock:])
 
-    adfuller_pval = adfuller(residuals)[1]
+    adfuller_pval = adfuller(resid)[1]
     print("Adfuller Test P-Val: {:.3f} Recommended Values:(x <= 0.05)".format(adfuller_pval))
 
-    dw_stat = durbin_watson(residuals)
+    dw_stat = durbin_watson(resid)
     print("Durbin-Watson Stat: {:.3f} Recommended Values:(|x - 2|>=1.0".format(dw_stat))
 
 

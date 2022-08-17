@@ -2,9 +2,12 @@ import numpy as np
 from scipy.optimize import fsolve
 from .explainer import Attributor
 
+import logging
+logger = logging.getLogger("karpiu-mmm")
+
 
 class PriorSolver:
-    """Solving Regresion Coefficient Prior from MMM by using Attribution logic"""
+    """Solving Regression Coefficient Prior from MMM by using Attribution logic"""
 
     def __init__(self, tests_df):
         self.tests_df = tests_df
@@ -30,8 +33,8 @@ class PriorSolver:
             test_lift = test_spend / test_icac
             test_lift_upper = test_spend / (test_icac - test_se)
 
-            print("test channel:{}".format(test_channel))
-            print("test spend: {:.3f}, test lift: {:.3f}".format(test_spend, test_lift))
+            logger.info("test channel:{}".format(test_channel))
+            logger.info("test spend: {:.3f}, test lift: {:.3f}".format(test_spend, test_lift))
 
             # create a callback used for scipy.optimize.fsolve
             attr_obj = Attributor(model, start=test_start, end=test_end)
