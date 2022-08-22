@@ -90,4 +90,4 @@ by Benjamin Vincent.
 
 # Fun Fact
 
-**Karpiu** is a term invented my (Edwin's) daugther while she just reached her terrible two. In the early development of this project, "Karpiu" became the dominating term at the home office. Hence, the term was dedicated to the package.
+**Karpiu** is a term invented the author's daugther while she just reached her terrible two. In the early development of this project, "Karpiu" became the dominating term in the author's home office. The author later dedicated this term to the package.
