@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from copy import deepcopy
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 from orbit.models import DLT
@@ -53,6 +53,7 @@ class MMM:
         self.fs_cols = list()
         self.fs_order = fs_order
         self.extra_priors = None
+        self._model = None
 
         # for dual seasonality
         if self.fs_order > 0:
@@ -358,22 +359,25 @@ class MMM:
 
     def get_coef_matrix(
             self,
-            regressors: np.array,
             date_array: np.array,
+            regressors: Optional[List[str]] = None,
     ) -> np.array:
         """Right now we ignore date_array since this is static coef. model
         Args:
-            regressors: array of strings of regressors labels to return the coefficient matrix
             date_array: user supplied date array for the regressors; right now this is dummy and just used for
+            regressors: list of strings of regressors labels to return the coefficient matrix
             determining the output array length
 
         Returns:
-            coffeicient matrix
+            coefficient matrix
         """
 
         coef_df = self._model.get_regression_coefs()
         coef_df = coef_df.set_index('regressor')
-        coef_array = coef_df.loc[regressors, 'coefficient'].values
+        if regressors is not None:
+            coef_array = coef_df.loc[regressors, 'coefficient'].values
+        else:
+            coef_array = coef_df.loc[:, 'coefficient'].values
         coef_array = np.tile(coef_array, (len(date_array), 1))
         return coef_array
 

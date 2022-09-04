@@ -63,7 +63,7 @@ def generate_cost_curves(
     spend_mask = (spend_df[date_col] >= spend_start) & (spend_df[date_col] <= spend_end)
     outcome_mask = (spend_df[date_col] >= outcome_start) & (spend_df[date_col] <= outcome_end)
 
-    # use overall spend range to determine simualtion scenarios
+    # use overall spend range to determine simulation scenarios
     spend_summmary = spend_df.loc[spend_mask, paid_channels].sum()
     spend_summmary.index = spend_summmary.index.set_names(['channel'])
     spend_summmary = spend_summmary.reset_index(name='total_spend')
