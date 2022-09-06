@@ -112,6 +112,8 @@ class MMM:
             slope_sm_input=0.01,
             num_warmup=4000,
             num_sample=1000,
+            # use small sigma for global trend as this is a long-term daily model
+            global_trend_sigma_prior=0.001,
             **self.best_params,
             **kwargs,
         )
@@ -163,6 +165,8 @@ class MMM:
             forecast_horizon=28,
             estimator='stan-map',
             verbose=False,
+            # use small sigma for global trend as this is a long-term daily model
+            global_trend_sigma_prior=0.001,
             **kwargs,
         )
 
@@ -273,6 +277,8 @@ class MMM:
             estimator='stan-mcmc',
             num_warmup=8000,
             num_sample=4000,
+            # use small sigma for global trend as this is a long-term daily model
+            global_trend_sigma_prior=0.001,
             **self.best_params,
             **kwargs,
         )
@@ -293,21 +299,19 @@ class MMM:
                 transform_df, period=365.25, order=self.fs_order
             )
 
-        # transformed data-frame would lose first n(=adstock size) observations due to adstock process
+        # transformed data-frame would lose the first n(=adstock) observations due to the adstock process
         adstock_matrix = self.get_adstock_matrix()
         max_adstock = self.get_max_adstock()
-
         new_transform_df = transform_df[max_adstock:].reset_index(drop=True)
         new_transform_df[self.spend_cols] = adstock_process(
             regressor_matrix=transform_df[self.spend_cols].values,
             adstock_matrix=adstock_matrix,
         )
-        # remove the old df
+        # (n_steps - max_adstock, ...)
         transform_df = new_transform_df
 
-        # dim: time x num of regressors
-        transform_df[self.spend_cols] = transform_df[self.spend_cols].values / sat_array.reshape(1, -1)
-        transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols])
+        # (n_steps,  n_regressors)
+        transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols].values / sat_array)
         transform_df[self.control_feat_cols] = np.log(transform_df[self.control_feat_cols])
 
         pred = self._model.predict(transform_df, **kwargs)
@@ -315,6 +319,7 @@ class MMM:
         pred[pred_tr_col] = pred[pred_tr_col].apply(np.exp)
 
         pred_base = df[[self.date_col]]
+        # preserve the shape of original input; first n(=adstock) will have null values
         pred = pd.merge(pred_base, pred, on=[self.date_col], how='left')
 
         return pred
@@ -344,12 +349,19 @@ class MMM:
     def get_adstock_df(self):
         return deepcopy(self.adstock_df)
 
-    def get_adstock_matrix(self):
+    # add arg with spend_col
+    def get_adstock_matrix(
+            self,
+            spend_cols: Optional[List[str]] = None,
+    ) -> np.array:
+        if spend_cols is None:
+            spend_cols = self.get_spend_cols()
+
         if self.adstock_df is not None:
             adstock_df = self.get_adstock_df()
-            adstock_matrix = adstock_df.values
+            adstock_matrix = adstock_df.loc[spend_cols, :].values
         else:
-            adstock_matrix = np.ones((len(self.spend_cols), 1))
+            adstock_matrix = np.ones((len(spend_cols), 1))
         return adstock_matrix
 
     def get_max_adstock(self):
@@ -388,8 +400,8 @@ class MMM:
     def get_extra_priors(self):
         return deepcopy(self.extra_priors)
 
+    def get_event_cols(self):
+        return deepcopy(self.event_cols)
 
-
-
-
-
+    def get_control_feat_cols(self):
+        return deepcopy(self.control_feat_cols)
