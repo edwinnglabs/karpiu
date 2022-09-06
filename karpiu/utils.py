@@ -2,7 +2,6 @@ import torch
 from torch.nn import functional as F
 import numpy as np
 import pandas as pd
-# events and holidays
 from datetime import datetime
 import holidays
 import re
@@ -16,12 +15,13 @@ def non_zero_quantile(x):
     return np.quantile(new_x, q=0.75)
 
 
-def adstock_process(regressor_matrix, adstock_matrix):
+def adstock_process(
+        regressor_matrix: np.array,
+        adstock_matrix: np.array,
+):
     """Perform 1-D convolution given data matrix and adstock filter matrix
-    regressor_matrix : 2-D array-like
-    matrix with 1st dim as number of time steps and 2nd dim as number of regressors
-    adstock_matrix : 2-D array like
-    matrix with 1st dim as number of regressors and 2nd dim as adstock filter weights
+    regressor_matrix: 2-D array like with shape (n_steps, n_regressors)
+    adstock_matrix: 2-D array like with shape (n_regressors, n_adstock_weights)
     """
     # flipping to align with time and convert to torch
     adstock_filters = torch.from_numpy(np.flip(adstock_matrix, 1).copy())

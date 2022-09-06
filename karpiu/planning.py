@@ -5,8 +5,10 @@ from tqdm.auto import tqdm
 from typing import Optional
 import math
 import matplotlib.pyplot as plt
-
+import logging
 from .models import MMM
+
+logger = logging.getLogger("karpiu-planning")
 
 
 class Optimizer:
@@ -15,7 +17,7 @@ class Optimizer:
 
 def generate_cost_curves(
         model: MMM,
-        max_spend: Optional[int] = None,
+        max_spend: Optional[float] = None,
         spend_df: Optional[pd.DataFrame] = None,
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
@@ -23,14 +25,14 @@ def generate_cost_curves(
     """ Generate cost curves given a Marketing Mix Model
 
     Args:
-        model:
-        max_spend:
-        spend_df:
-        spend_start:
-        spend_end:
+        model: fitted MMM object
+        max_spend: single integer, the maximum spend of a channel budget used in the simulation
+        spend_df: data frame to use in
+        spend_start: date string indicate the start of date to collect spend for simulation inclusively
+        spend_end: date string indicate the end of date to collect spend for simulation inclusively
 
     Returns:
-
+        cost_curves: data frame storing all result from the simulation
     """
     if spend_df is None:
         spend_df = model.raw_df.copy()
@@ -63,19 +65,30 @@ def generate_cost_curves(
     spend_mask = (spend_df[date_col] >= spend_start) & (spend_df[date_col] <= spend_end)
     outcome_mask = (spend_df[date_col] >= outcome_start) & (spend_df[date_col] <= outcome_end)
 
+    # (n_steps, n_channels)
+    spend_matrix = spend_df.loc[spend_mask, paid_channels].values
+    # (n_channels, )
+    total_spend_arr = np.sum(spend_matrix, axis=0)
+    zero_spend_flag = total_spend_arr < 1e-3
+    if sum(zero_spend_flag) > 0:
+        logger.info("Zero spend of a channel detected. Impute with value 1e-3.")
+        spend_matrix[:, zero_spend_flag] = 1e-3
+        spend_df.loc[spend_mask, paid_channels] = spend_matrix
+        total_spend_arr = np.sum(spend_matrix, axis=0)
+
     # use overall spend range to determine simulation scenarios
-    spend_summmary = spend_df.loc[spend_mask, paid_channels].sum()
-    spend_summmary.index = spend_summmary.index.set_names(['channel'])
-    spend_summmary = spend_summmary.reset_index(name='total_spend')
+    spend_summary = pd.DataFrame(paid_channels, columns=['channel'])
+    spend_summary['total_spend'] = total_spend_arr
+
     if max_spend is not None:
-        spend_summmary['max_multiplier'] = max_spend / spend_summmary['total_spend']
+        spend_summary['max_multiplier'] = max_spend / spend_summary['total_spend']
     else:
-        spend_summmary['max_multiplier'] = np.max(spend_summmary['total_spend']) / spend_summmary['total_spend']
+        spend_summary['max_multiplier'] = np.max(spend_summary['total_spend']) / spend_summary['total_spend']
 
     for ch in tqdm(paid_channels):
-        # multiplier always contains 1.0
+        # multiplier always contains 1.0 to indicate current spend
         # multiplier is derived based on ratio of the maximum
-        temp_max_multiplier = spend_summmary.loc[spend_summmary['channel'] == ch, 'max_multiplier'].values
+        temp_max_multiplier = spend_summary.loc[spend_summary['channel'] == ch, 'max_multiplier'].values
         temp_multipliers = np.sort(np.concatenate([
             np.linspace(0, temp_max_multiplier, 10).squeeze(-1),
             np.ones(1),
