@@ -9,10 +9,10 @@ from itertools import product
 from scipy.stats import mode as scipy_mode
 
 
-def non_zero_quantile(x):
+def non_zero_quantile(x, q=0.75):
     assert len(x.shape) == 1
     new_x = x[x > 0]
-    return np.quantile(new_x, q=0.75)
+    return np.quantile(new_x, q=q)
 
 
 def adstock_process(
