@@ -4,7 +4,6 @@ from copy import deepcopy
 import logging
 from typing import Dict, List, Optional
 
-
 from orbit.models import DLT
 from orbit.utils.features import make_fourier_series_df
 from orbit.utils.params_tuning import grid_search_orbit
@@ -18,7 +17,22 @@ class MMM:
     """The core class of building a MMM
 
     Attributes:
-        WIP
+        kpi_col: column of the metrics to be used in final measurement
+        response_col: column of the metric to be fitted; in the current prototype, it is the same as kpi_col
+        date_col: date string column use to index observations on each time step
+        spend_cols: columns indicate the channel investment
+        full_event_cols:
+        event_cols:
+        control_feat_cols:
+        fs_cols:
+        fs_order:
+        regressors: list of strings indicate all the regressors used in the model including fourier series terms
+        regression_scheme: regression scheme used for model fitting
+        saturation_df:
+        adstock_df:
+        best_params:
+        tuning_df:
+        _model:
     """
 
     def __init__(
@@ -34,8 +48,8 @@ class MMM:
     ):
         """
         Args:
-            kpi_col: kpi column
-            date_col: date column
+            kpi_col: column of the metrics to be used in final measurement
+            date_col: date string column use to index observations on each time step
             spend_cols: columns indicate the channel investment
             adstock_df: dataframe in a specific format describing the adstock
             control_feat_cols: optional; features for control
@@ -45,11 +59,15 @@ class MMM:
         """
         logger.info("Initialize model")
         self.kpi_col = kpi_col
+        # for backtest purpose
+        self.response_col = kpi_col
         self.date_col = date_col
         self.full_event_cols = event_cols
         self.event_cols = deepcopy(event_cols)
-        self.full_control_feat_cols = control_feat_cols
+        self.full_control_feat_cols = deepcopy(control_feat_cols)
         self.control_feat_cols = deepcopy(control_feat_cols)
+        self.spend_cols = deepcopy(spend_cols)
+        self.spend_cols.sort()
         self.fs_cols = list()
         self.fs_order = fs_order
         self.extra_priors = None
@@ -62,17 +80,11 @@ class MMM:
                 self.fs_cols.append('fs_sin{}'.format(x))
             self.fs_cols.sort()
 
-        self.spend_cols = spend_cols
-        self.spend_cols.sort()
-
-        # for backtest purpose
-        self.response_col = kpi_col
         self.raw_df = None
 
         # for attribution purpose
         self.regressors = self.spend_cols + self.fs_cols + self.event_cols + self.control_feat_cols
         self.regressors.sort()
-
         self.saturation_df = None
         self.adstock_df = adstock_df
         if adstock_df is not None:
@@ -81,8 +93,6 @@ class MMM:
                     raise ("Spend channel {} is not included in adstock.".format(x))
 
         self.regression_scheme = None
-
-        self.model = None
         self.best_params = {}
         self.tuning_df = None
 
@@ -97,6 +107,7 @@ class MMM:
                 transform_df, period=365.25, order=self.fs_order
             )
 
+        # exclude spend cols in the extra features screening
         regressor_cols = self.fs_cols + self.full_event_cols + self.full_control_feat_cols
 
         temp_dlt = DLT(
@@ -199,17 +210,19 @@ class MMM:
 
     def _derive_saturation(
             self,
-            df: pd.DataFrame
+            df: pd.DataFrame,
+            q: float = 0.75,
     ) -> None:
         self.saturation_df = (
-            df[self.spend_cols].apply(non_zero_quantile).reset_index()
+            df[self.spend_cols].apply(non_zero_quantile, q=q).reset_index()
         ).rename(columns={'index': 'regressor', 0: 'saturation'})
         self.saturation_df = self.saturation_df.set_index('regressor')
 
     def fit(
             self,
-            df,
-            extra_priors=None,
+            df: pd.DataFrame,
+            extra_priors: Optional[pd.DataFrame] = None,
+            saturation_quantile: float = 0.75,
             **kwargs
     ) -> None:
 
@@ -219,8 +232,7 @@ class MMM:
         logger.info("Pre-process data.")
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
         transform_df[self.control_feat_cols] = np.log(transform_df[self.control_feat_cols])
-
-        self._derive_saturation(transform_df)
+        self._derive_saturation(transform_df, q=saturation_quantile)
         sat_array = self.saturation_df['saturation'].values
 
         # transformed data-frame would lose first n(=adstock size) observations due to adstock process
@@ -288,6 +300,7 @@ class MMM:
     def predict(
             self,
             df: pd.DataFrame,
+            decompose: bool = False,
             **kwargs
     ) -> pd.DataFrame:
         # TODO: can make transformation a module
@@ -314,13 +327,47 @@ class MMM:
         transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols].values / sat_array)
         transform_df[self.control_feat_cols] = np.log(transform_df[self.control_feat_cols])
 
-        pred = self._model.predict(transform_df, **kwargs)
+        pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
+        # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [x for x in ['prediction_5', 'prediction', 'prediction_95'] if x in pred.columns]
         pred[pred_tr_col] = pred[pred_tr_col].apply(np.exp)
 
         pred_base = df[[self.date_col]]
         # preserve the shape of original input; first n(=adstock) will have null values
         pred = pd.merge(pred_base, pred, on=[self.date_col], how='left')
+
+        # unlike orbit, decompose the regression and seasonal regression here
+        if decompose:
+            pred = pred.drop(columns=['regression']).rename(columns={'seasonality': 'weekly seasonality'})
+            # (n_regressors, )
+            coef_paid = self.get_coef_vector(self.spend_cols)
+            # (n_steps, n_regressors)
+            x_paid = transform_df[self.spend_cols].values
+            reg_paid = np.concatenate([
+                np.full(max_adstock, fill_value=np.nan),
+                np.sum(coef_paid * x_paid, -1),
+            ])
+            pred['paid'] = reg_paid
+            if self.event_cols:
+                # (n_regressors, )
+                coef_event = self.get_coef_vector(self.event_cols)
+                # (n_steps, n_regressors)
+                x_event = transform_df[self.event_cols].values
+                reg_event = np.concatenate([
+                    np.full(max_adstock, fill_value=np.nan),
+                    np.sum(coef_event * x_event, -1)
+                ])
+                pred['events'] = reg_event
+            if self.fs_cols:
+                # (n_regressors, )
+                coef_fs = self.get_coef_vector(self.fs_cols)
+                # (n_steps, n_regressors)
+                x_fs = transform_df[self.fs_cols].values
+                reg_fs = np.concatenate([
+                    np.full(max_adstock, fill_value=np.nan),
+                    np.sum(coef_fs * x_fs, -1)
+                ])
+                pred['yearly seasonality'] = reg_fs
 
         return pred
 
@@ -369,6 +416,38 @@ class MMM:
         adstock_matrix = self.get_adstock_matrix()
         return adstock_matrix.shape[1] - 1
 
+    def get_regression_summary(self) -> pd.DataFrame:
+        # by default, orbit uses lower=0.05, upper=0.95
+        regression_coef_dfs = self._model.get_regression_coefs().rename(
+            columns={
+                'regressor_sign': 'sign',
+                'coefficient': 'coef_p50',
+                'coefficient_lower': 'coef_p05',
+                'coefficient_upper': 'coef_p95',
+            }
+        )
+        regression_scheme = self.regression_scheme.copy().rename(
+            columns={
+                'regressor_coef_prior': 'loc_prior',
+                'regressor_sigma_prior': 'scale_prior',
+            }
+        ).drop(columns=['regressor_sign'])
+        out = pd.merge(left=regression_coef_dfs, right=regression_scheme, on=['regressor'])
+        return out
+
+    def get_coef_vector(
+            self,
+            regressors: Optional[List[str]] = None,
+    ) -> np.array:
+
+        coef_df = self._model.get_regression_coefs()
+        coef_df = coef_df.set_index('regressor')
+        if regressors is not None:
+            coef_array = coef_df.loc[regressors, 'coefficient'].values
+        else:
+            coef_array = coef_df.loc[:, 'coefficient'].values
+        return coef_array
+
     def get_coef_matrix(
             self,
             date_array: np.array,
@@ -387,11 +466,11 @@ class MMM:
         coef_df = self._model.get_regression_coefs()
         coef_df = coef_df.set_index('regressor')
         if regressors is not None:
-            coef_array = coef_df.loc[regressors, 'coefficient'].values
+            coef_matrix = coef_df.loc[regressors, 'coefficient'].values
         else:
-            coef_array = coef_df.loc[:, 'coefficient'].values
-        coef_array = np.tile(coef_array, (len(date_array), 1))
-        return coef_array
+            coef_matrix = coef_df.loc[:, 'coefficient'].values
+        coef_matrix = np.tile(coef_matrix, (len(date_array), 1))
+        return coef_matrix
 
     def get_saturation(self):
         # in the same order of spend
