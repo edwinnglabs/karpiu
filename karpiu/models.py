@@ -41,9 +41,11 @@ class MMM:
             date_col: str,
             spend_cols: List[str],
             adstock_df: pd.DataFrame,
-            control_feat_cols: List[str] = [],
-            event_cols: List[str] = [],
+            scalability_df: Optional[pd.DataFrame] = None,
+            control_feat_cols: Optional[List[str]] = None,
+            event_cols: Optional[List[str]] = None,
             fs_order: int = 0,
+            marketing_elasticity_constraint: float = 0.75,
             **kwargs
     ):
         """
@@ -62,13 +64,29 @@ class MMM:
         # for backtest purpose
         self.response_col = kpi_col
         self.date_col = date_col
-        self.full_event_cols = event_cols
-        self.event_cols = deepcopy(event_cols)
-        self.full_control_feat_cols = deepcopy(control_feat_cols)
-        self.control_feat_cols = deepcopy(control_feat_cols)
+
         self.spend_cols = deepcopy(spend_cols)
         self.spend_cols.sort()
+        self.scalability_df = scalability_df
+
+        if event_cols is None:
+            self.full_event_cols = list()
+            self.event_cols = list()
+        else:
+            event_cols = deepcopy(event_cols)
+            self.full_event_cols = deepcopy(event_cols)
+            self.full_event_cols.sort()
+            self.event_cols = deepcopy(self.full_event_cols)
+
+        if control_feat_cols is None:
+            self.control_feat_cols = list()
+        else:
+            self.full_control_feat_cols = deepcopy(control_feat_cols)
+            self.full_control_feat_cols.sort()
+            self.control_feat_cols = deepcopy(self.full_control_feat_cols)
+        # complex seasonality
         self.fs_cols = list()
+        self.marketing_elasticity_constraint = marketing_elasticity_constraint
         self.fs_order = fs_order
         self.extra_priors = None
         self._model = None
@@ -211,18 +229,29 @@ class MMM:
     def _derive_saturation(
             self,
             df: pd.DataFrame,
-            q: float = 0.75,
     ) -> None:
+        # rebuild a base everytime it fits data
         self.saturation_df = (
-            df[self.spend_cols].apply(non_zero_quantile, q=q).reset_index()
-        ).rename(columns={'index': 'regressor', 0: 'saturation'})
+            df[self.spend_cols].apply(non_zero_quantile, q=0.5).reset_index()
+        ).rename(columns={'index': 'regressor', 0: 'saturation_base'})
+        # left join the base with the condition
+        self.saturation_df = pd.merge(
+            self.saturation_df,
+            self.scalability_df,
+            on='regressor',
+            how='left',
+        )
+        # multiply the condition
+        scalability = self.saturation_df['scalability'].values
+        self.saturation_df['saturation'] = self.saturation_df['saturation_base'] * scalability
+        if np.any(scalability < 0):
+            raise Exception("All spend scalability needs to be > 0.")
         self.saturation_df = self.saturation_df.set_index('regressor')
 
     def fit(
             self,
             df: pd.DataFrame,
             extra_priors: Optional[pd.DataFrame] = None,
-            saturation_quantile: float = 0.75,
             **kwargs
     ) -> None:
 
@@ -232,7 +261,7 @@ class MMM:
         logger.info("Pre-process data.")
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
         transform_df[self.control_feat_cols] = np.log(transform_df[self.control_feat_cols])
-        self._derive_saturation(transform_df, q=saturation_quantile)
+        self._derive_saturation(transform_df)
         sat_array = self.saturation_df['saturation'].values
 
         # transformed data-frame would lose first n(=adstock size) observations due to adstock process
@@ -264,8 +293,18 @@ class MMM:
         reg_scheme['regressor_sign'] = \
             ["+"] * len(self.spend_cols) + ["="] * len(self.fs_cols + self.event_cols + self.control_feat_cols)
         reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
+        # total coefficient size of spend cannot exceed 1.0; it's better to restrict sum of sigma ~ 0.3
+        n_spend_cols = len(self.spend_cols)
+        sigma_prior = self.marketing_elasticity_constraint / n_spend_cols
+        logger.info("With total elasticity of spend constraint, set total sigma prior <= {:.3f}.".format(
+            self.marketing_elasticity_constraint
+        ))
+        logger.info("Constraint is translated to be sigma prior <= {:.5f}  with {} spend columns".format(
+            sigma_prior, n_spend_cols)
+        )
+
         reg_scheme['regressor_sigma_prior'] = \
-            [0.1] * len(self.spend_cols) + [10.0] * len(self.fs_cols + self.event_cols + self.control_feat_cols)
+            [sigma_prior] * n_spend_cols + [10.0] * len(self.fs_cols + self.event_cols + self.control_feat_cols)
         reg_scheme = reg_scheme.set_index('regressor')
 
         if extra_priors is not None:
