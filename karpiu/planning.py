@@ -45,8 +45,9 @@ def generate_cost_curves(
 
     paid_channels = model.get_spend_cols()
 
+    # generate the intersection of input and available channels
     if channels is not None and channels != 'overall':
-        paid_channels = set(paid_channels).union(set(channels))
+        paid_channels = set(paid_channels).intersection(set(channels))
 
     date_col = model.date_col
     max_adstock = model.get_max_adstock()
@@ -75,9 +76,10 @@ def generate_cost_curves(
     spend_mask = (spend_df[date_col] >= spend_start) & (spend_df[date_col] <= spend_end)
     outcome_mask = (spend_df[date_col] >= outcome_start) & (spend_df[date_col] <= outcome_end)
 
-    # create a case with all spend set to zero to estimate organic
+    # create a case with all spend in the spend range set to zero to estimate organic
+    # note that it doesn't include past spend as it already happens
     temp_df = spend_df.copy()
-    temp_df.loc[:, paid_channels] = 0.
+    temp_df.loc[spend_mask, paid_channels] = 0.
     pred = model.predict(df=temp_df)
     total_outcome = np.sum(pred.loc[outcome_mask, 'prediction'].values)
     cost_curves_dict['ch'].append('organic')
@@ -176,6 +178,7 @@ def plot_cost_curves(
     organic_outcome = cost_curves.loc[cost_curves['ch'] == 'organic', 'total_outcome'].values
 
     if len(paid_channels) > 2:
+        # mulitple cost curves
         fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=(18, nrows * 2.2))
         axes = axes.flatten()
 
@@ -237,6 +240,7 @@ def plot_cost_curves(
         fig.legend(handles, labels, loc=9, ncol=2, bbox_to_anchor=(0.5, 0), prop={'size': 18})
         fig.tight_layout()
     else:
+        # single cost curve
         fig, ax = plt.subplots(1, 1, figsize=(18, 12))
         temp_cc = cost_curves[cost_curves['ch'] == 'overall'].reset_index(drop=True)
         curr_spend_mask = temp_cc['multiplier'] == 1
@@ -259,3 +263,4 @@ def plot_cost_curves(
         )
 
         ax.axhline(y=organic_outcome / spend_scaler, linestyle='dashed', label='organic')
+        ax.set_xlim(left=0., right=x_max)
