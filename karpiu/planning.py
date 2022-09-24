@@ -23,6 +23,7 @@ def generate_cost_curves(
         spend_df: Optional[pd.DataFrame] = None,
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
+        max_multiplier: Optional[float] = 2.0,
 ) -> pd.DataFrame:
     """ Generate cost curves given a Marketing Mix Model
 
@@ -34,7 +35,8 @@ def generate_cost_curves(
         spend_df: data frame to use in
         spend_start: date string indicate the start of date to collect spend for simulation inclusively
         spend_end: date string indicate the end of date to collect spend for simulation inclusively
-
+        max_multiplier: used when generating overall cost curve only; value to set the end point for simulating
+        cost curve
     Returns:
         cost_curves: data frame storing all result from the simulation
     """
@@ -88,7 +90,7 @@ def generate_cost_curves(
 
         # (n_steps, n_channels)
         spend_matrix = spend_df.loc[spend_mask, paid_channels].values
-        temp_multipliers = np.linspace(1e-3, 100.0, n_steps)
+        temp_multipliers = np.linspace(0.0, max_multiplier, n_steps)
 
         for multiplier in temp_multipliers:
             temp_df = spend_df.copy()
