@@ -45,7 +45,7 @@ class MMM:
             control_feat_cols: Optional[List[str]] = None,
             event_cols: Optional[List[str]] = None,
             fs_order: int = 0,
-            marketing_elasticity_constraint: float = 0.75,
+            total_market_sigma_prior: float = 0.35,
             **kwargs
     ):
         """
@@ -71,22 +71,23 @@ class MMM:
 
         if event_cols is None:
             self.full_event_cols = list()
-            self.event_cols = list()
         else:
-            event_cols = deepcopy(event_cols)
             self.full_event_cols = deepcopy(event_cols)
             self.full_event_cols.sort()
-            self.event_cols = deepcopy(self.full_event_cols)
 
         if control_feat_cols is None:
-            self.control_feat_cols = list()
+            self.full_control_feat_cols = list()
         else:
             self.full_control_feat_cols = deepcopy(control_feat_cols)
             self.full_control_feat_cols.sort()
-            self.control_feat_cols = deepcopy(self.full_control_feat_cols)
+
+        # initialize as full columns
+        self.event_cols = deepcopy(self.full_event_cols)
+        self.control_feat_cols = deepcopy(self.full_control_feat_cols)
+
         # complex seasonality
         self.fs_cols = list()
-        self.marketing_elasticity_constraint = marketing_elasticity_constraint
+        self.total_market_sigma_prior = total_market_sigma_prior
         self.fs_order = fs_order
         self.extra_priors = None
         self._model = None
@@ -295,13 +296,10 @@ class MMM:
         reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
         # total coefficient size of spend cannot exceed 1.0; it's better to restrict sum of sigma ~ 0.3
         n_spend_cols = len(self.spend_cols)
-        sigma_prior = self.marketing_elasticity_constraint / n_spend_cols
-        logger.info("With total elasticity of spend constraint, set total sigma prior <= {:.3f}.".format(
-            self.marketing_elasticity_constraint
+        sigma_prior = self.total_market_sigma_prior/ n_spend_cols
+        logger.info("With total sigma prior {:.3f} and {} columns, set sigma prior {:.3f}.".format(
+            self.total_market_sigma_prior, n_spend_cols, sigma_prior
         ))
-        logger.info("Constraint is translated to be sigma prior <= {:.5f}  with {} spend columns".format(
-            sigma_prior, n_spend_cols)
-        )
 
         reg_scheme['regressor_sigma_prior'] = \
             [sigma_prior] * n_spend_cols + [10.0] * len(self.fs_cols + self.event_cols + self.control_feat_cols)
