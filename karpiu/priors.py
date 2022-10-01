@@ -3,6 +3,7 @@ from scipy.optimize import fsolve
 from .explainer import Attributor
 
 import logging
+
 logger = logging.getLogger("karpiu-mmm")
 
 
@@ -16,7 +17,6 @@ class PriorSolver:
         input_df = model.raw_df.copy()
         output_df = self.tests_df.copy()
         date_col = model.date_col
-        coef_df = model._model.get_regression_coefs()
 
         for idx, row in self.tests_df.iterrows():
             test_start = row['test_start']
@@ -43,6 +43,7 @@ class PriorSolver:
                 attr_res = attr_obj.make_attribution(
                     new_coef_name=test_channel,
                     new_coef=x,
+                    true_up=True,
                 )
                 _, spend_attr_df, _, _ = attr_res
                 mask = (spend_attr_df[date_col] >= test_start) & (spend_attr_df[date_col] <= test_end)
@@ -50,11 +51,9 @@ class PriorSolver:
                 loss = np.fabs(res - target)
                 return loss
 
-            coef_mask = coef_df['regressor'] == test_channel
-            init_search_pt = coef_df.loc[coef_mask, 'coefficient'].values[0]
+            init_search_pt = model.get_coef_vector([test_channel])
             coef_prior = fsolve(attr_call_back, x0=init_search_pt, args=test_lift)[0]
             coef_prior_upper = fsolve(attr_call_back, x0=init_search_pt, args=test_lift_upper)[0]
-            # coef_prior = fsolve(attr_call_back, 0.3)[0]
 
             # store derived result
             output_df.loc[idx, 'coef_prior'] = coef_prior
@@ -65,6 +64,3 @@ class PriorSolver:
             output_df.loc[idx, 'test_lift'] = test_lift
 
         return output_df
-
-
-

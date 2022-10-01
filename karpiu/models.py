@@ -235,6 +235,8 @@ class MMM:
         self.saturation_df = (
             df[self.spend_cols].apply(non_zero_quantile, q=0.5).reset_index()
         ).rename(columns={'index': 'regressor', 0: 'saturation_base'})
+        if set(self.spend_cols) != set(self.scalability_df['regressor'].tolist()):
+            raise Exception("Regressors between saturation based and scalability df are not perfectly matching.")
         # left join the base with the condition
         self.saturation_df = pd.merge(
             self.saturation_df,

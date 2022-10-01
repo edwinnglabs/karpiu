@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from copy import deepcopy
-from typing import Optional
+from typing import Optional, Tuple, List
 
 from .utils import adstock_process, np_shift
 from .models import MMM
@@ -29,6 +29,7 @@ class Attributor:
     def __init__(
             self,
             model: MMM,
+            attr_regressors: Optional[List[str]] = None,
             start: Optional[str] = None,
             end: Optional[str] = None,
             df: Optional[pd.DataFrame] = None,
@@ -51,9 +52,11 @@ class Attributor:
 
         date_col = self.date_col
         self.max_adstock = model.get_max_adstock()
-        self.adstock_matrix = model.get_adstock_matrix()
         # it excludes the fourier-series columns
         self.full_regressors = model.get_regressors()
+        # FIXME: right now it DOES NOT work with including control features;
+        # FIXME: right now it may not support fourier series seasonal regressors
+        self.event_regressors = model.get_event_cols()
 
         # FIXME: keep model object for debug only
         self.model = deepcopy(model)
@@ -80,11 +83,14 @@ class Attributor:
         else:
             self.kpi_col = kpi_name
 
-        self.attr_regressors = model.get_spend_cols()
+        if attr_regressors is None:
+            self.attr_regressors = model.get_spend_cols()
+        else:
+            self.attr_regressors = attr_regressors
 
         # better date operations
         # organize the dates. This pads the range with the carry over before it starts
-        self.calc_start = self.attr_start + pd.Timedelta(days=-self.max_adstock)
+        self.calc_start = self.attr_start - pd.Timedelta(days=self.max_adstock)
         self.calc_end = self.attr_end + pd.Timedelta(days=self.max_adstock)
 
         if verbose:
@@ -105,55 +111,94 @@ class Attributor:
             (df[date_col] >= self.calc_start) & (df[date_col] <= self.calc_end),
             [date_col, self.kpi_col] + self.full_regressors
         ].reset_index(drop=True)
+        self.dt_array = self.df_bau[date_col].values
 
-        # prepare a few matrices and arrays for rest of the calculations
-        # required matrices and arrays such as saturation, adstock, regressors matrix etc.
         # just make sure attr_regressors input by user align original all regressors order
         attr_regressors_idx = [
             idx for idx in range(len(self.full_regressors)) if self.full_regressors[idx] in self.attr_regressors
         ]
         self.attr_regressors = [self.full_regressors[idx] for idx in attr_regressors_idx]
 
+        # prepare a few matrices and arrays for rest of the calculations
+        # required matrices and arrays such as saturation, adstock, regressors matrix etc.
+        self.attr_adstock_matrix = model.get_adstock_matrix(self.attr_regressors)
         # untransformed regressor matrix
-        # attr_regressor_matrix dim: time x num of regressor
+        # (n_steps, n_regressors)
         self.attr_regressor_matrix = self.df_bau[self.attr_regressors].values
-
-        # saturation_array dim: 1 x num of regressor
-        self.saturation_array = np.expand_dims(
-            model.get_saturation().loc[self.attr_regressors, 'saturation'].values,
-            0
-        )
+        # (n_regressors, )
+        sat_df = model.get_saturation()
+        self.attr_sat_array = sat_df.loc[self.attr_regressors, 'saturation'].values
 
         # adstock_regressor_matrix dim: time x num of regressors
         if self.max_adstock >= 1:
             # adstock transformed regressors will be used to calculate pred_bau later
-            self.adstock_regressor_matrix = adstock_process(
-                self.attr_regressor_matrix, self.adstock_matrix
+            self.attr_adstock_regressor_matrix = adstock_process(
+                self.attr_regressor_matrix, self.attr_adstock_matrix
             )
             # we lose first n(=max_adstock) observations; to maintain original dimension,
             # we need to pad zeros n(=max_adstock) time
-            self.adstock_regressor_matrix = np.concatenate((
-                np.zeros((self.max_adstock, self.adstock_regressor_matrix.shape[1])),
-                self.adstock_regressor_matrix
+            self.attr_adstock_regressor_matrix = np.concatenate((
+                np.zeros((self.max_adstock, self.attr_adstock_regressor_matrix.shape[1])),
+                self.attr_adstock_regressor_matrix
             ), 0)
         else:
-            self.adstock_regressor_matrix = deepcopy(self.attr_regressor_matrix)
-
-        self.coef_matrix = model.get_coef_matrix(
-            date_array=self.df_bau[date_col],
+            self.attr_adstock_regressor_matrix = deepcopy(self.attr_regressor_matrix)
+        self.attr_coef_matrix = model.get_coef_matrix(
+            date_array=self.dt_array,
             regressors=self.attr_regressors,
         )
 
         # organic, zero values baseline prediction
-        self.df_zero = self.df_bau.copy()
-        self.df_zero.loc[:, self.attr_regressors] = 0.0
-        # prediction with all predictors turned to zero
-        self.pred_zero = model.predict(df=self.df_zero)['prediction'].values
-
+        df_zero = self.df_bau.copy()
+        df_zero.loc[:, self.attr_regressors] = 0.0
+        # prediction with all attr regressors turned to zero
+        # (n_steps, )
+        zero_pred_df = model.predict(df=df_zero, decompose=True)
+        # log scale
+        trend = zero_pred_df['trend'].values
+        seas = zero_pred_df['weekly seasonality'].values
+        # original scale
+        self.pred_zero = zero_pred_df['prediction'].values
         # dependent on the coefficients (can be specified by users in next step)
         self.pred_bau = None
 
-    def make_attribution(self, new_coef_name=None, new_coef=None, true_up=True):
+        base_comp = trend + seas
+
+        self.non_attr_regressors = list(
+            set(self.full_regressors) - set(self.attr_regressors) - set(self.event_regressors)
+        )
+        if len(self.non_attr_regressors) > 0:
+            non_attr_coef_matrix = model.get_coef_matrix(
+                date_array=self.dt_array,
+                regressors=self.non_attr_regressors,
+            )
+            non_attr_sat_array = sat_df.loc[self.non_attr_regressors, 'saturation'].values
+            non_attr_regressor_matrix = self.df_bau.loc[:, self.non_attr_regressors].values
+            non_attr_adstock_matrix = model.get_adstock_matrix(self.non_attr_regressors)
+            non_attr_adstock_regressor_matrix = adstock_process(non_attr_regressor_matrix, non_attr_adstock_matrix)
+            non_attr_adstock_regressor_matrix = np.concatenate((
+                np.zeros((self.max_adstock, non_attr_adstock_regressor_matrix.shape[1])),
+                non_attr_adstock_regressor_matrix
+            ), 0)
+            base_comp += np.sum(
+                non_attr_coef_matrix * np.log1p(non_attr_adstock_regressor_matrix / non_attr_sat_array),
+                -1,
+            )
+
+        event_coef_matrix = model.get_coef_matrix(
+            date_array=self.dt_array,
+            regressors=self.event_regressors,
+        )
+        event_regressor_matrix = self.df_bau.loc[:, self.event_regressors].values
+        base_comp += np.sum(event_coef_matrix * event_regressor_matrix, -1)
+        self.base_comp = base_comp
+
+    def make_attribution(
+            self,
+            new_coef_name: Optional[str] = None,
+            new_coef: Optional[float] = None,
+            true_up: bool = True
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         A general time-based attribution on stat-space model with regression. This is 
         much faster than the legacy method.
@@ -161,7 +206,8 @@ class Attributor:
 
         Parameters
         ----------
-        new_coef : tuple
+        new_coef_name :
+        new_coef:
         true_up : bool
         """
         # get the number of lags in adstock expressed as days
@@ -170,164 +216,52 @@ class Attributor:
         kpi_col = self.kpi_col
 
         # (n_steps, n_attr_regressors)
-        coef_matrix = self.coef_matrix.copy()
-
+        attr_coef_matrix = self.attr_coef_matrix.copy()
         if new_coef is not None:
             coef_search_found = False
             for idx, x in enumerate(self.attr_regressors):
                 if new_coef_name == x:
                     coef_search_found = True
-                    coef_matrix[:, idx] = new_coef
+                    attr_coef_matrix[:, idx] = new_coef
                     break
             if not coef_search_found:
                 raise Exception("New coefficient name does not match any regressors in the model.")
-
         # TODO: consider update the prediction function such that the shape of the prediction is the same as the input
         # modified coef matrix would impact this prediction vector
         # prediction with full spend in business-as-usual case
         # NOTE: this vector has less length (a `max_adstock` shift from the beginning)
+        varying_comp = np.sum(
+            attr_coef_matrix * np.log1p(self.attr_adstock_regressor_matrix / self.attr_sat_array), -1
+        )
+        # (n_steps + 2 * max_adstock, ); already tested value is the same as model.predict()
+        self.pred_bau = np.exp(self.base_comp + varying_comp)
 
-        # saturation_array dim: 1 x num of regressor
-        self.pred_bau = self.model.predict(df_bau)['prediction'].values
-
-        # a delta matrix with extra dimension (num of attr_regressor) and store the delta at calendar date view
-        # so that we do the normalization within each calendar date (not spend date)
-        # delta matrix stores the impact on calendar date by each channel spend due to each adstock impact
-        # the first channel dimension is added by an extra 1 to include organic
-        # note that this channel should not have any adstock effect simply because
-        # we don't care organic adstock; it doesn't impact paid on calculation which is the whole
-        # purpose of resolving adstock effect
-        # (n_steps, max_adstock + 1, n_attr_regressors + 1)
-        delta_matrix = np.zeros((
-            self.attr_regressor_matrix.shape[0],
-            self.max_adstock + 1,
-            len(self.attr_regressors) + 1
-        ))
-
-        # a same size of matrix declared to prepare paid date dimension
-        # (n_steps, max_adstock + 1, n_attr_regressors + 1)
-        paid_on_attr_matrix = np.zeros(delta_matrix.shape)
-
-        # active on can directly take organic as it does not care adstock;
-        # hence all impact contribute at first(current) time
-        delta_matrix[:, 0, 0] = self.pred_zero
-
-        # loop through the channels
-        for i, c in enumerate(self.attr_regressors):
-            # store the delta where row is the time spend is turned off,
-            # and column is the subsequent impact from time t (size=adstock + 1)
-            temp_delta_matrix = np.zeros((self.attr_regressor_matrix.shape[0], self.max_adstock + 1))
-
-            # (n_steps, n_attr_regressors)
-            temp_bau_regressor = deepcopy(self.attr_regressor_matrix[:, i])
-            # (n_steps, n_attr_regressors)
-            temp_bau_regressor_adstock = deepcopy(self.adstock_regressor_matrix[:, i])
-            # (1, max_adstock)
-            temp_adstock_filter = np.expand_dims(deepcopy(self.adstock_matrix[i, :]), 0)
-
-            # loop over time to turn off spend; note that j here is not necessarily time prediction target at!
-            # j equals t only if adstock = 0 
-            # attr end - attr start = 10
-            # max_adstock 55
-            # attr_regressor_matrix needs to be (55 * 2 + 10)
-            # add max_adstock period at the beginning for active-on
-            # add max_adstock period at the end for paid-on
-            for j in range(0, self.attr_regressor_matrix.shape[0]):
-                # time x num of regressors
-                temp_attr_regressor_zero = deepcopy(temp_bau_regressor)
-                # time x num of regressors x 1
-                temp_attr_regressor_zero = np.expand_dims(temp_attr_regressor_zero, -1)
-                # turn off spend at time j
-                temp_attr_regressor_zero[j] = 0
-                # time x num of regressors
-                temp_attr_regressor_zero = np.squeeze(
-                    adstock_process(temp_attr_regressor_zero, temp_adstock_filter),
-                    -1
-                )
-                # pad zeros; since both bau and set-zero condition yields the same number in the
-                # zero-padding period, the delta ends up to be (constant x (1 - 1 / 1)) =  0
-                # it yields the same result as legacy version.
-                if self.max_adstock > 0:
-                    temp_attr_regressor_zero = np.concatenate((
-                        np.zeros(self.max_adstock),
-                        temp_attr_regressor_zero
-                    ))
-
-                # measure impact from j to j + max_adstock only
-                coef_array = coef_matrix[j:(j + self.max_adstock + 1), i]
-                # compute the delta who is the ratio between lift of bau spend and zero spend at time j
-                numerator = (1 + temp_attr_regressor_zero[j:(j + self.max_adstock + 1)] /
-                             self.saturation_array[:, i]) ** coef_array
-                denominator = (1 + temp_bau_regressor_adstock[j:(j + self.max_adstock + 1)] /
-                               self.saturation_array[:, i]) ** coef_array
-
-                delta = self.pred_bau[j:(j + self.max_adstock + 1)] * (1 - numerator / denominator)
-                temp_delta_matrix[j, 0:len(delta)] = delta
-
-            # so far what does delta matrix tell us?
-            # it is the delta on each channel, each time spend turn off, its effect on each adstock
-            # however, we need to shift the adstock effect to the next day (downward) as adstock
-            # impact subsequent time, not the current time
-            # that's why we have the next step to shift the matrix down for the delta_matrix
-
-            # shift down the arrays by adstock effect size in j dimension; NAs / zeros padded at original place (elements get shifted)
-            # note that the first dimension is dedicated to organic in i dimension; so index from left need to be 
-            # shifted one up
-            if self.max_adstock > 0:
-                delta_matrix[:, :, i + 1] = np_shift(temp_delta_matrix, np.arange(self.max_adstock + 1))
-            else:
-                delta_matrix[:, :, i + 1] = temp_delta_matrix
-
-        # get the sum for all channels and adstock effect
-        # (n_steps, 1, 1)
-        total_delta = np.sum(delta_matrix, axis=(-1, -2), keepdims=True)
-
-        # remove zeros to avoid divide-by-zero issue
-        index_zero = total_delta == 0
-        total_delta[index_zero] = 1
-
-        # get the normalized delta
-        # (n_steps, max_adstock + 1, n_attr_regressors + 1)
-        norm_delta_matrix = delta_matrix / total_delta
-
-        # FIXME: assuming true up now; applying on kpi provided
-        # full_attr_matrix is on activities (not spend) date view
-        # this is the most important matrix in time x adstock x num of regressors
-        # which represents the most granular attribution
-        # (n_steps, max_adstock + 1, n_attr_regressors + 1)
-        full_attr_matrix = norm_delta_matrix * df_bau[kpi_col].values.reshape(-1, 1, 1)
-
-        # sum over lags (adstock);
-        # (n_steps, n_attr_regressors + 1)
-        activities_attr_matrix = np.sum(full_attr_matrix, axis=1)
-
-        ########################################################################################
-        # get the total from a channel in a day (sum over lag); this is for the paid on
-        ########################################################################################
-        # shift up arrays by lags; NAs / zeros padded at the end
-        if self.max_adstock > 0:
-            for idx in range(full_attr_matrix.shape[2]):
-                paid_on_attr_matrix[:, :, idx] = np_shift(
-                    full_attr_matrix[:, :, idx], np.arange(0, -1 * (self.max_adstock + 1), -1))
+        if true_up:
+            true_up_array = self.df_bau[kpi_col].values
         else:
-            paid_on_attr_matrix = deepcopy(full_attr_matrix)
+            true_up_array = self.pred_bau
 
-        # sum over lags (adstock);
-        # (n_steps, n_attr_regressors + 1)
-        spend_attr_matrix = np.sum(paid_on_attr_matrix, axis=1)
-        # paid on and active on should be the same here for organic
-        # assert np.allclose(activities_attr_matrix[:, 0], spend_attr_matrix[:, 0])
+        activities_attr_matrix, spend_attr_matrix = make_attribution_numpy(
+            coef_matrix=attr_coef_matrix,
+            regressor_matrix=self.attr_regressor_matrix,
+            adstock_regressor_matrix=self.attr_adstock_regressor_matrix,
+            pred_bau=self.pred_bau,
+            pred_zero=self.pred_zero,
+            adstock_matrix=self.attr_adstock_matrix,
+            saturation_array=self.attr_sat_array,
+            true_up_arr=true_up_array,
+        )
 
-        # note that activities attribution only makes sense when spend is fully sentled after adstock process
-        # hence first n(=max_adstock) need to be be disgard
+        # note that activities based attribution only makes sense when spend is fully settled after adstock process
+        # hence first n(=max_adstock) need to be discarded
         activities_attr_df = df_bau[self.max_adstock:].reset_index(drop=True)
         activities_attr_df = activities_attr_df[[date_col]]
         activities_attr_df[['organic'] + self.attr_regressors] = activities_attr_matrix[self.max_adstock:]
 
         # note that spend attribution only makes sense when all attributing metric fully observed in the entire
         # adstock process
-        # also need to disgard first n(=max_adstock) observation as you cannot observe the correct pred_bau
-        # hence last n(=max_adstock) need to be be disgard
+        # also need to discard first n(=max_adstock) observation as you cannot observe the correct pred_bau
+        # hence last n(=max_adstock) need to be discarded
         spend_attr_df = df_bau[self.max_adstock:-self.max_adstock].reset_index(drop=True)
         spend_attr_df = spend_attr_df[[date_col]]
         spend_attr_df[['organic'] + self.attr_regressors] = spend_attr_matrix[self.max_adstock:-self.max_adstock]
@@ -341,6 +275,170 @@ class Attributor:
         )
 
         return activities_attr_df, spend_attr_df, spend_df, cost_df
+
+
+def make_attribution_numpy(
+        coef_matrix: np.array,
+        regressor_matrix: np.array,
+        adstock_regressor_matrix: np.array,
+        pred_bau: np.array,
+        pred_zero: np.array,
+        adstock_matrix: np.array,
+        saturation_array: np.array,
+        true_up_arr: np.array,
+) -> Tuple[np.array, np.array]:
+    """ A numpy version of making attribution
+
+    Notes
+    -----
+    Assuming n_steps = spend range + 2 * max_adstock
+
+    Parameters
+    ----------
+    coef_matrix: array in shape (n_steps, n_regressors)
+    regressor_matrix: array in shape (n_stepsk, n_regressors)
+    adstock_regressor_matrix: array in shape (n_steps, n_regressors)
+    pred_bau:  (n_steps, )
+    pred_zero: (n_step, )
+    adstock_matrix: (n_regressors, max_adstock + 1)
+    saturation_array:  (n_regressors, )
+    true_up_arr: (n_steps, )
+    """
+
+    # a delta matrix with extra dimension (num of attr_regressor) and store the delta at calendar date view
+    # so that we do the normalization within each calendar date (not spend date)
+    # delta matrix stores the impact on calendar date by each channel spend due to each adstock impact
+    # the first channel dimension is added by an extra 1 to include organic
+    # note that this channel should not have any adstock effect simply because
+    # we don't care organic adstock; it doesn't impact paid on calculation which is the whole
+    # purpose of resolving adstock effect
+    # (n_steps = spend_range + 2 * max_adstock)
+    n_steps, n_regressors = regressor_matrix.shape
+    max_adstock = adstock_matrix.shape[1] - 1
+
+    # (n_steps, max_adstock + 1, n_regressors + 1)
+    delta_matrix = np.zeros((
+        n_steps,
+        max_adstock + 1,
+        n_regressors + 1
+    ))
+
+    # a same size of matrix declared to prepare paid date dimension
+    # (n_steps, max_adstock + 1, n_regressors + 1)
+    paid_on_attr_matrix = np.zeros(delta_matrix.shape)
+
+    # active on can directly take organic as it does not care adstock;
+    # hence all impact contribute at first(current) time
+    delta_matrix[:, 0, 0] = pred_zero
+
+    # loop through the channels
+    for i in range(n_regressors):
+        # store the delta where row is the time spend is turned off,
+        # and column is the subsequent impact from time t (size=adstock + 1)
+        # (n_steps, max_adstock + 1)
+        temp_delta_matrix = np.zeros((n_steps, max_adstock + 1))
+
+        # (n_steps, )
+        temp_bau_regressor = deepcopy(regressor_matrix[:, i])
+        # (n_steps, )
+        temp_bau_regressor_adstock = deepcopy(adstock_regressor_matrix[:, i])
+        # (1, max_adstock)
+        temp_adstock_filter = np.expand_dims(deepcopy(adstock_matrix[i, :]), 0)
+
+        # loop over time to turn off spend; note that j here is not necessarily time prediction target at!
+        # j equals t only if adstock = 0
+        # attr end - attr start = 10
+        # max_adstock 55
+        # attr_regressor_matrix needs to be (55 * 2 + 10)
+        # add max_adstock period at the beginning for active-on
+        # add max_adstock period at the end for paid-on
+        for j in range(0, n_steps):
+            # (n_steps, )
+            temp_attr_regressor_zero = deepcopy(temp_bau_regressor)
+            # (n_steps, 1); make it work for adstock process
+            temp_attr_regressor_zero = np.expand_dims(temp_attr_regressor_zero, -1)
+            # turn off spend at time j
+            temp_attr_regressor_zero[j] = 0
+            # (n_steps - max_adstock, )
+            temp_attr_regressor_zero = np.squeeze(
+                adstock_process(temp_attr_regressor_zero, temp_adstock_filter),
+                -1
+            )
+            # pad zeros; since both bau and set-zero condition yields the same number in the
+            # zero-padding period, the delta ends up to be (constant x (1 - 1 / 1)) =  0
+            # it yields the same result as legacy version.
+            if max_adstock > 0:
+                # (n_steps, )
+                temp_attr_regressor_zero = np.concatenate((
+                    np.zeros(max_adstock),
+                    temp_attr_regressor_zero
+                ))
+
+            # measure impact from j to j + max_adstock only
+            # (max_adstock + 1, )
+            coef_array = coef_matrix[j:(j + max_adstock + 1), i]
+
+            # compute the delta who is the ratio between lift of bau spend and zero spend at time j
+            # (max_adstock + 1, )
+            numerator = (1 + temp_attr_regressor_zero[j:(j + max_adstock + 1)] /
+                         saturation_array[i]) ** coef_array
+            # (max_adstock + 1, )
+            denominator = (1 + temp_bau_regressor_adstock[j:(j + max_adstock + 1)] /
+                           saturation_array[i]) ** coef_array
+
+            delta = pred_bau[j:(j + max_adstock + 1)] * (1 - numerator / denominator)
+            # (n_steps, max_adstock + 1)
+            temp_delta_matrix[j, 0:len(delta)] = delta
+
+        # so far what does delta matrix tell us?
+        # it is the delta on each channel, each time spend turn off, its effect on each adstock
+        # however, we need to shift the adstock effect to the next day (downward) as adstock
+        # impact subsequent time, not the current time
+        # that's why we have the next step to shift the matrix down for the delta_matrix
+
+        # shift down the arrays by adstock effect size in j dimension; NAs / zeros padded at original place (elements get shifted)
+        # note that the first dimension is dedicated to organic in i dimension; so index from left need to be
+        # shifted one up
+        if max_adstock > 0:
+            delta_matrix[:, :, i + 1] = np_shift(temp_delta_matrix, np.arange(max_adstock + 1))
+        else:
+            delta_matrix[:, :, i + 1] = temp_delta_matrix
+
+    # get the sum for all channels and adstock effect
+    # (n_steps, 1, 1)
+    total_delta = np.sum(delta_matrix, axis=(-1, -2), keepdims=True)
+
+    # remove zeros to avoid divide-by-zero issue
+    index_zero = total_delta == 0
+    total_delta[index_zero] = 1
+
+    # get the normalized delta
+    # (n_steps, max_adstock + 1, n_regressors + 1)
+    norm_delta_matrix = delta_matrix / total_delta
+
+    # (n_steps, n_attr_regressors + 1)
+    full_attr_matrix = norm_delta_matrix * true_up_arr.reshape(-1, 1, 1)
+
+    # sum over lags (adstock);
+    # (n_steps, n_attr_regressors + 1)
+    activities_attr_matrix = np.sum(full_attr_matrix, axis=1)
+
+    ########################################################################################
+    # get the total from a channel in a day (sum over lag); this is for the paid on
+    ########################################################################################
+    # shift up arrays by lags; NAs / zeros padded at the end
+    if max_adstock > 0:
+        for idx in range(full_attr_matrix.shape[2]):
+            paid_on_attr_matrix[:, :, idx] = np_shift(
+                full_attr_matrix[:, :, idx], np.arange(0, -1 * (max_adstock + 1), -1))
+    else:
+        paid_on_attr_matrix = deepcopy(full_attr_matrix)
+
+    # sum over lags (adstock);
+    # (n_steps, n_attr_regressors + 1)
+    spend_attr_matrix = np.sum(paid_on_attr_matrix, axis=1)
+
+    return activities_attr_matrix, spend_attr_matrix
 
 # deprecated
 # def extract_adstock_matrix(adstock_df, regressor):
