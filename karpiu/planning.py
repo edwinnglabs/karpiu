@@ -19,11 +19,11 @@ def generate_cost_curves(
         model: MMM,
         n_steps: int = 10,
         channels: Optional[Union[List[str], str]] = None,
-        max_spend: Optional[float] = None,
         spend_df: Optional[pd.DataFrame] = None,
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
         max_multiplier: Optional[float] = 2.0,
+        min_spend = 1e-3,
 ) -> pd.DataFrame:
     """ Generate cost curves given a Marketing Mix Model
 
@@ -31,12 +31,14 @@ def generate_cost_curves(
         model: fitted MMM object
         n_steps: number of steps to estimate outcomes to generate cost curves
         channels: list of channel names to generate cost curves
-        max_spend: single integer, the maximum spend of a channel budget used in the simulation
+        single numeric value, the maximum spend of a channel budget used in the simulation
         spend_df: data frame to use in
         spend_start: date string indicate the start of date to collect spend for simulation inclusively
         spend_end: date string indicate the end of date to collect spend for simulation inclusively
-        max_multiplier: used when generating overall cost curve only; value to set the end point for simulating
-        cost curve
+        max_multiplier: when generating overall cost curve only, it is the value to set the end point for simulating
+        cost curve; when generating channel specific cost curve, it only applies to the channel which has the
+        highest maximum spend across channels
+        min_spend: minimum spend of a channel per entry; otherwise, the number will be imputed by the min_spend
     Returns:
         cost_curves: data frame storing all result from the simulation
     """
@@ -47,7 +49,7 @@ def generate_cost_curves(
 
     # generate the intersection of input and available channels
     if channels is not None and channels != 'overall':
-        paid_channels = set(paid_channels).intersection(set(channels))
+        paid_channels = list(set(paid_channels).intersection(set(channels)))
 
     date_col = model.date_col
     max_adstock = model.get_max_adstock()
@@ -76,6 +78,16 @@ def generate_cost_curves(
     spend_mask = (spend_df[date_col] >= spend_start) & (spend_df[date_col] <= spend_end)
     outcome_mask = (spend_df[date_col] >= outcome_start) & (spend_df[date_col] <= outcome_end)
 
+    # (n_steps, n_channels)
+    spend_matrix = spend_df.loc[spend_mask, paid_channels].values
+    # it's buggy to estimate slope at zero or working with multiplier
+    # hence, add a very small delta to make the analysis work
+    zero_spend_flag = spend_matrix < min_spend
+    if np.any(np.sum(zero_spend_flag)):
+        logger.info("Zero spend detected. Impute with value 1e-3.")
+        spend_matrix[zero_spend_flag] = min_spend
+        spend_df.loc[spend_mask, paid_channels] = spend_matrix
+
     # create a case with all spend in the spend range set to zero to estimate organic
     # note that it doesn't include past spend as it already happens
     temp_df = spend_df.copy()
@@ -89,9 +101,6 @@ def generate_cost_curves(
 
     # decide to compute overall cost curves or channel level
     if channels == 'overall':
-
-        # (n_steps, n_channels)
-        spend_matrix = spend_df.loc[spend_mask, paid_channels].values
         temp_multipliers = np.linspace(0.0, max_multiplier, n_steps)
 
         for multiplier in temp_multipliers:
@@ -106,27 +115,14 @@ def generate_cost_curves(
             cost_curves_dict['multiplier'].append(multiplier)
 
     else:
-        # (n_steps, n_channels)
-        spend_matrix = spend_df.loc[spend_mask, paid_channels].values
         # (n_channels, )
         total_spend_arr = np.sum(spend_matrix, axis=0)
-        zero_spend_flag = total_spend_arr < 1e-3
-        if sum(zero_spend_flag) > 0:
-            logger.info("Zero spend of a channel detected. Impute with value 1e-3.")
-            spend_matrix[:, zero_spend_flag] = 1e-3
-            spend_df.loc[spend_mask, paid_channels] = spend_matrix
-            total_spend_arr = np.sum(spend_matrix, axis=0)
-            # temp_df = spend_df.copy()
-            # temp_df.loc[spend_mask, paid_channels] = spend_df.loc[spend_mask, paid_channels] * multiplier
-
         # use overall spend range to determine simulation scenarios
         spend_summary = pd.DataFrame(paid_channels, columns=['channel'])
         spend_summary['total_spend'] = total_spend_arr
 
-        if max_spend is not None:
-            spend_summary['max_multiplier'] = max_spend / spend_summary['total_spend']
-        else:
-            spend_summary['max_multiplier'] = np.max(spend_summary['total_spend']) / spend_summary['total_spend']
+        max_spend = np.max(spend_summary['total_spend']) / spend_summary['total_spend']
+        spend_summary['max_multiplier'] = max_spend * max_multiplier
 
         for ch in tqdm(paid_channels):
             # multiplier always contains 1.0 to indicate current spend
@@ -136,6 +132,8 @@ def generate_cost_curves(
                 np.linspace(0, temp_max_multiplier, n_steps).squeeze(-1),
                 np.ones(1),
             ]))
+            # remove duplicates
+            temp_multipliers = np.unique(temp_multipliers)
 
             for multiplier in temp_multipliers:
                 temp_df = spend_df.copy()
