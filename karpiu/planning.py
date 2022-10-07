@@ -158,24 +158,24 @@ def plot_cost_curves(
         spend_scaler: float = 1e3,
         outcome_scaler: float = 1e3,
         optim_cost_curves: Optional[pd.DataFrame] = None,
+        plot_margin: float = 0.05,
 ) -> None:
     paid_channels = cost_curves['ch'].unique().tolist()
     paid_channels = list(set(paid_channels) - set('organic'))
     n = len(paid_channels)
     nrows = math.ceil(n / 2)
 
-    y_min = 0.0
-    y_max = np.max(cost_curves['total_outcome']) / outcome_scaler
+    y_min = np.min(cost_curves['total_outcome'].values) / outcome_scaler
+    y_max = np.max(cost_curves['total_outcome'].values) / outcome_scaler
     x_max = np.max(cost_curves['total_spend'].values) / spend_scaler
 
     if optim_cost_curves is not None:
-        # y_min2 = np.min(optim_cost_curves['total_outcome']) / outcome_scaler
+        y_min2 = np.min(optim_cost_curves['total_outcome']) / outcome_scaler
         y_max2 = np.max(optim_cost_curves['total_outcome']) / outcome_scaler
-        # y_min = min(y_min, y_min2)
+        y_min = min(y_min, y_min2)
         y_max = max(y_max, y_max2)
 
     organic_outcome = cost_curves.loc[cost_curves['ch'] == 'organic', 'total_outcome'].values
-
     if len(paid_channels) > 2:
         # mulitple cost curves
         fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=(18, nrows * 2.2))
@@ -231,7 +231,7 @@ def plot_cost_curves(
             axes[idx].set_xlabel('spend')
             axes[idx].set_ylabel('signups')
             axes[idx].xaxis.set_major_formatter('${x:1.0f}')
-            axes[idx].set_ylim(y_min * 0.95, y_max * 1.025)
+            axes[idx].set_ylim(y_min * (1 - plot_margin), y_max * (1 + plot_margin))
             axes[idx].set_xlim(left=0., right=x_max)
 
             # axes[idx].legend(loc='upper left')
