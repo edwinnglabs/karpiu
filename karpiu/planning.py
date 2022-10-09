@@ -308,8 +308,9 @@ def calculate_marginal_cost(
     dummy_pred_df = model.predict(df=df, decompose=True)
     # log scale (mea_steps, )
     trend = dummy_pred_df.loc[mea_mask, 'trend'].values
-    seas = dummy_pred_df.loc[mea_mask, 'weekly seasonality'].values
-    base_comp = trend + seas
+    # seas = dummy_pred_df.loc[mea_mask, 'weekly seasonality'].values
+    # base_comp = trend + seas
+    base_comp = trend
 
     # background regressors
     bg_regressors = list(
