@@ -7,6 +7,8 @@ import holidays
 import re
 from itertools import product
 from scipy.stats import mode as scipy_mode
+from functools import reduce
+from typing import List
 
 
 def non_zero_quantile(x, q=0.75):
@@ -139,7 +141,7 @@ def extend_ts_features(df, n_periods, date_col, rolling_window=30):
     extended_df[date_col] = pd.to_datetime(last_dt) + pd.to_timedelta(np.arange(1, n_periods + 1), unit=infer_freq)
     extended_df[features] = fill_vals
 
-    res = pd.concat([df, extended_df])
+    res = pd.concat([df, extended_df]).reset_index(drop=True)
     return res
 
 
@@ -155,3 +157,11 @@ def generate_posteriors_mode(posteriors, var_names):
             posteriors_mode[k] = scipy_mode(v)[0]
 
     return posteriors_mode
+
+
+def merge_dfs(
+        dfs: List[pd.DataFrame],
+        on: List[str],
+        how='inner',
+) -> pd.DataFrame:
+    return reduce(lambda left, right: pd.merge(left, right, on=on, how=how), dfs)
