@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from copy import deepcopy
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from orbit.models import DLT
 from orbit.utils.features import make_fourier_series_df
@@ -44,7 +44,8 @@ class MMM:
             scalability_df: Optional[pd.DataFrame] = None,
             control_feat_cols: Optional[List[str]] = None,
             event_cols: Optional[List[str]] = None,
-            fs_order: int = 0,
+            seasonality: Optional[List[int]] = None,
+            fs_orders: Optional[List[int]] = None,
             total_market_sigma_prior: float = 0.35,
             **kwargs
     ):
@@ -56,7 +57,7 @@ class MMM:
             adstock_df: dataframe in a specific format describing the adstock
             control_feat_cols: optional; features for control
             event_cols: optional; events to include for time-series forecast
-            fs_order: orders of fourier terms; used in seasonality
+            fs_orders: orders of fourier terms; used in seasonality
             **kwargs:
         """
         logger.info("Initialize model")
@@ -88,21 +89,38 @@ class MMM:
         # complex seasonality
         self.fs_cols = list()
         self.total_market_sigma_prior = total_market_sigma_prior
-        self.fs_order = fs_order
+
+        if seasonality is not None:
+            self.seasonality = seasonality
+        else:
+            self.seasonality = list()
+
+        if fs_orders is not None:
+            self.fs_orders = fs_orders
+        else:
+            self.fs_orders = list()
+
+        assert len(seasonality) == len(fs_orders)
+
         self.extra_priors = None
         self._model = None
 
-        # for dual seasonality
-        if self.fs_order > 0:
-            for x in range(1, self.fs_order + 1):
-                self.fs_cols.append('fs_cos{}'.format(x))
-                self.fs_cols.append('fs_sin{}'.format(x))
-            self.fs_cols.sort()
+        # for complex seasonality
+        self.fs_cols_flatten = list()
+        if len(self.fs_orders) > 0:
+            for s, fs in zip(self.seasonality, self.fs_orders):
+                fs_cols = list()
+                for x in range(1, fs + 1):
+                    fs_cols.append('s{}_fs_cos{}'.format(s, x))
+                    fs_cols.append('s{}_fs_sin{}'.format(s, x))
+                fs_cols.sort()
+                self.fs_cols_flatten += fs_cols
+                self.fs_cols.append(fs_cols)
 
         self.raw_df = None
 
-        # for attribution purpose
-        self.regressors = self.spend_cols + self.fs_cols + self.event_cols + self.control_feat_cols
+        # for attribution purpose; keep tracking on different types of regressors
+        self.regressors = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         self.regressors.sort()
         self.saturation_df = None
         self.adstock_df = adstock_df
@@ -121,25 +139,29 @@ class MMM:
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
         transform_df[self.full_control_feat_cols] = np.log(transform_df[self.full_control_feat_cols])
 
-        if self.fs_order > 0:
-            transform_df, _ = make_fourier_series_df(
-                transform_df, period=365.25, order=self.fs_order
-            )
+        if len(self.fs_orders) > 0:
+            for s, fs_order in zip(self.seasonality, self.fs_orders):
+                transform_df, _ = make_fourier_series_df(
+                    transform_df,
+                    prefix="s{}_".format(s),
+                    period=s,
+                    order=fs_order
+                )
 
         # exclude spend cols in the extra features screening
-        regressor_cols = self.fs_cols + self.full_event_cols + self.full_control_feat_cols
+        regressor_cols = self.full_event_cols + self.full_control_feat_cols
 
         temp_dlt = DLT(
-            seasonality=7,
+            # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=regressor_cols,
             regressor_sigma_prior=[10.0] * len(regressor_cols),
             date_col=self.date_col,
             # uses mcmc for high dimensional features selection
             estimator='stan-mcmc',
-            # a safe setting for fast regression
-            level_sm_input=0.01,
-            slope_sm_input=0.01,
+            # a safe setting for fast regression; will estimate this in final model
+            level_sm_input=0.001,
+            # slope_sm_input=0.01,
             num_warmup=4000,
             num_sample=1000,
             # use small sigma for global trend as this is a long-term daily model
@@ -154,8 +176,8 @@ class MMM:
         self.event_cols = [x for x in selected_feats if x in self.full_event_cols]
         self.control_feat_cols = [x for x in selected_feats if x in self.full_control_feat_cols]
 
-        # re-order regressors
-        self.regressors = self.spend_cols + self.fs_cols + self.event_cols + self.control_feat_cols
+        # re-order regressors after events filtering
+        self.regressors = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         self.regressors.sort()
 
         logger.info("Full features: {}".format(self.full_event_cols + self.full_control_feat_cols))
@@ -164,27 +186,34 @@ class MMM:
     def optim_hyper_params(
             self,
             df: pd.DataFrame,
+            param_grid: Optional[Dict[str, Any]] = None,
             **kwargs
     ) -> None:
         logger.info("Optimize smoothing params. Only events and seasonality are involved.")
         transform_df = df.copy()
         logger.info("Pre-process data.")
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
-        if self.fs_order > 0:
-            transform_df, _ = make_fourier_series_df(
-                transform_df, period=365.25, order=self.fs_order
-            )
+        if len(self.fs_orders) > 0:
+            for s, fs_order in zip(self.seasonality, self.fs_orders):
+                transform_df, _ = make_fourier_series_df(
+                    transform_df,
+                    prefix="s{}_".format(s),
+                    period=s,
+                    order=fs_order
+                )
 
         # some choices for hyper-parameters gird search
-        param_grid = {
-            "slope_sm_input": list(np.exp(np.linspace(-6.5, -1, 5))),
-            "seasonality_sm_input": list(np.exp(np.linspace(-6.5, -1, 5))),
-            "damped_factor": [0.7, 0.8, 0.95],
-        }
+        if param_grid is None:
+            # half-life: 7d=0.9057, 28d=0.9755, 90d=0.9923, 180=0.9962
+            param_grid = {
+                "slope_sm_input": list(1 - np.linspace(0.9057, 0.9755, 3)),
+                "level_sm_input": list(1 - np.linspace(0.9755, 0.9962, 5)),
+                "damped_factor":  list(np.linspace(0.9057, 0.9923, 3)),
+            }
 
-        regressors = self.fs_cols + self.event_cols + self.control_feat_cols
+        regressors = self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         dlt_proto = DLT(
-            seasonality=7,
+            # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=regressors,
             # only include events and seasonality in hyper-params screening
@@ -283,18 +312,22 @@ class MMM:
         transform_df[self.spend_cols] = transform_df[self.spend_cols].values / sat_array.reshape(1, -1)
         transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols])
 
-        if self.fs_order > 0:
-            transform_df, _ = make_fourier_series_df(
-                transform_df, period=365.25, order=self.fs_order
-            )
+        if len(self.fs_orders) > 0:
+            for s, fs_order in zip(self.seasonality, self.fs_orders):
+                transform_df, _ = make_fourier_series_df(
+                    transform_df,
+                    prefix="s{}_".format(s),
+                    period=s,
+                    order=fs_order
+                )
 
         logger.info("Build regression scheme")
         reg_scheme = pd.DataFrame()
         # in this order
         # self.spend_cols + self.fs_cols + self.event_cols + self.control_feat_cols 
-        reg_scheme['regressor'] = self.spend_cols + self.fs_cols + self.event_cols + self.control_feat_cols
+        reg_scheme['regressor'] = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         reg_scheme['regressor_sign'] = \
-            ["+"] * len(self.spend_cols) + ["="] * len(self.fs_cols + self.event_cols + self.control_feat_cols)
+            ["+"] * len(self.spend_cols) + ["="] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
         # total coefficient size of spend cannot exceed 1.0; it's better to restrict sum of sigma ~ 0.3
         n_spend_cols = len(self.spend_cols)
@@ -304,7 +337,7 @@ class MMM:
         ))
 
         reg_scheme['regressor_sigma_prior'] = \
-            [sigma_prior] * n_spend_cols + [10.0] * len(self.fs_cols + self.event_cols + self.control_feat_cols)
+            [sigma_prior] * n_spend_cols + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme = reg_scheme.set_index('regressor')
 
         if extra_priors is not None:
@@ -318,7 +351,7 @@ class MMM:
         self.regression_scheme = reg_scheme
 
         self._model = DLT(
-            seasonality=7,
+            # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=reg_scheme.index.tolist(),
             regressor_sign=reg_scheme['regressor_sign'].tolist(),
@@ -346,10 +379,14 @@ class MMM:
         transform_df = df.copy()
         sat_array = self.saturation_df['saturation'].values
 
-        if self.fs_order > 0:
-            transform_df, _ = make_fourier_series_df(
-                transform_df, period=365.25, order=self.fs_order
-            )
+        if len(self.fs_orders) > 0:
+            for s, fs_order in zip(self.seasonality, self.fs_orders):
+                transform_df, _ = make_fourier_series_df(
+                    transform_df,
+                    prefix="s{}_".format(s),
+                    period=s,
+                    order=fs_order
+                )
 
         # transformed data-frame would lose the first n(=adstock) observations due to the adstock process
         adstock_matrix = self.get_adstock_matrix()
@@ -377,7 +414,8 @@ class MMM:
 
         # unlike orbit, decompose the regression and seasonal regression here
         if decompose:
-            pred = pred.drop(columns=['regression']).rename(columns={'seasonality': 'weekly seasonality'})
+            # pred = pred.drop(columns=['regression']).rename(columns={'seasonality': 'weekly seasonality'})
+            pred = pred.drop(columns=['regression'])
             # (n_regressors, )
             coef_paid = self.get_coef_vector(self.spend_cols)
             # (n_steps, n_regressors)
@@ -392,21 +430,24 @@ class MMM:
                 coef_event = self.get_coef_vector(self.event_cols)
                 # (n_steps, n_regressors)
                 x_event = transform_df[self.event_cols].values
+                # workaround with period that was unknown due to adstock
                 reg_event = np.concatenate([
                     np.full(max_adstock, fill_value=np.nan),
                     np.sum(coef_event * x_event, -1)
                 ])
                 pred['events'] = reg_event
-            if self.fs_cols:
-                # (n_regressors, )
-                coef_fs = self.get_coef_vector(self.fs_cols)
-                # (n_steps, n_regressors)
-                x_fs = transform_df[self.fs_cols].values
-                reg_fs = np.concatenate([
-                    np.full(max_adstock, fill_value=np.nan),
-                    np.sum(coef_fs * x_fs, -1)
-                ])
-                pred['yearly seasonality'] = reg_fs
+            if len(self.fs_cols) > 0:
+                for s, fs_col in zip(self.seasonality, self.fs_cols):
+                    # (n_regressors, )
+                    coef_fs = self.get_coef_vector(fs_col)
+                    # (n_steps, n_regressors)
+                    x_fs = transform_df[fs_col].values
+                    # workaround with period that was unknown due to adstock
+                    reg_fs = np.concatenate([
+                        np.full(max_adstock, fill_value=np.nan),
+                        np.sum(coef_fs * x_fs, -1)
+                    ])
+                    pred['s-{} seasonality'.format(s)] = reg_fs
 
         return pred
 

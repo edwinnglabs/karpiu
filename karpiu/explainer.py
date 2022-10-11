@@ -156,13 +156,14 @@ class Attributor:
         zero_pred_df = model.predict(df=df_zero, decompose=True)
         # log scale
         trend = zero_pred_df['trend'].values
-        seas = zero_pred_df['weekly seasonality'].values
+        # seas = zero_pred_df['weekly seasonality'].values
         # original scale
         self.pred_zero = zero_pred_df['prediction'].values
         # dependent on the coefficients (can be specified by users in next step)
         self.pred_bau = None
 
-        base_comp = trend + seas
+        # base_comp = trend + seas
+        base_comp = trend
 
         self.non_attr_regressors = list(
             set(self.full_regressors) - set(self.attr_regressors) - set(self.event_regressors)

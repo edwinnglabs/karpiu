@@ -23,7 +23,7 @@ def generate_cost_curves(
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
         max_multiplier: Optional[float] = 2.0,
-        min_spend = 1e-3,
+        min_spend=1e-3,
 ) -> pd.DataFrame:
     """ Generate cost curves given a Marketing Mix Model
 
@@ -308,8 +308,9 @@ def calculate_marginal_cost(
     dummy_pred_df = model.predict(df=df, decompose=True)
     # log scale (mea_steps, )
     trend = dummy_pred_df.loc[mea_mask, 'trend'].values
-    seas = dummy_pred_df.loc[mea_mask, 'weekly seasonality'].values
-    base_comp = trend + seas
+    # seas = dummy_pred_df.loc[mea_mask, 'weekly seasonality'].values
+    # base_comp = trend + seas
+    base_comp = trend
 
     # background regressors
     bg_regressors = list(
