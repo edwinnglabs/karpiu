@@ -292,6 +292,7 @@ def calculate_marginal_cost(
     max_adstock = model.get_max_adstock()
     full_regressors = model.get_regressors()
     event_regressors = model.get_event_cols()
+    control_regressors = model.get_control_feat_cols()
     sat_df = model.get_saturation()
 
     spend_start = pd.to_datetime(spend_start)
@@ -314,8 +315,9 @@ def calculate_marginal_cost(
 
     # background regressors
     bg_regressors = list(
-        set(full_regressors) - set(channels) - set(event_regressors)
+        set(full_regressors) - set(channels) - set(event_regressors) - set(control_regressors)
     )
+
     if len(bg_regressors) > 0:
         # (n_regressors, )
         bg_coef_array = model.get_coef_vector(regressors=bg_regressors)
@@ -340,6 +342,12 @@ def calculate_marginal_cost(
         # (mea_steps, n_regressors)
         event_regressor_matrix = df.loc[mea_mask, event_regressors].values
         base_comp += np.sum(event_coef_array * event_regressor_matrix, -1)
+
+    if len(control_regressors) > 0:
+        control_coef_array = model.get_coef_vector(regressors=control_regressors)
+        # (mea_steps, n_regressors)
+        control_regressor_matrix = np.log1p(df.loc[mea_mask, control_regressors].values)
+        base_comp += np.sum(control_coef_array * control_regressor_matrix, -1)
 
     # base_comp calculation finished above
     # the varying comp is computed below

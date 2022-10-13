@@ -100,7 +100,7 @@ class MMM:
         else:
             self.fs_orders = list()
 
-        assert len(seasonality) == len(fs_orders)
+        assert len(self.seasonality) == len(self.fs_orders)
 
         self.extra_priors = None
         self._model = None
@@ -137,7 +137,7 @@ class MMM:
         logger.info("Screen events by Pr(coef>=0) >= 0.9 or Pr(coef>=0) <= 0.1.")
         transform_df = df.copy()
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
-        transform_df[self.full_control_feat_cols] = np.log(transform_df[self.full_control_feat_cols])
+        transform_df[self.full_control_feat_cols] = np.log1p(transform_df[self.full_control_feat_cols])
 
         if len(self.fs_orders) > 0:
             for s, fs_order in zip(self.seasonality, self.fs_orders):
@@ -292,7 +292,7 @@ class MMM:
         transform_df = df.copy()
         logger.info("Pre-process data.")
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
-        transform_df[self.control_feat_cols] = np.log(transform_df[self.control_feat_cols])
+        transform_df[self.control_feat_cols] = np.log1p(transform_df[self.control_feat_cols])
         self._derive_saturation(transform_df)
         sat_array = self.saturation_df['saturation'].values
 
@@ -401,7 +401,7 @@ class MMM:
 
         # (n_steps,  n_regressors)
         transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols].values / sat_array)
-        transform_df[self.control_feat_cols] = np.log(transform_df[self.control_feat_cols])
+        transform_df[self.control_feat_cols] = np.log1p(transform_df[self.control_feat_cols].values)
 
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
         # _5 and _95 probably won't exist with median prediction for current version
@@ -448,6 +448,17 @@ class MMM:
                         np.sum(coef_fs * x_fs, -1)
                     ])
                     pred['s-{} seasonality'.format(s)] = reg_fs
+            if len(self.control_feat_cols) > 0:
+                # (n_regressors, )
+                coef_control = self.get_coef_vector(self.control_feat_cols)
+                # (n_steps, n_regressors)
+                x_control = np.log1p(transform_df[self.control_feat_cols].values)
+                # workaround with period that was unknown due to adstock
+                reg_control = np.concatenate([
+                    np.full(max_adstock, fill_value=np.nan),
+                    np.sum(coef_control * x_control, -1)
+                ])
+                pred['control_features'] = reg_control
 
         return pred
 

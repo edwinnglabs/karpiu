@@ -57,6 +57,7 @@ class Attributor:
         # FIXME: right now it DOES NOT work with including control features;
         # FIXME: right now it may not support fourier series seasonal regressors
         self.event_regressors = model.get_event_cols()
+        self.control_regressors = model.get_control_feat_cols()
 
         # FIXME: keep model object for debug only
         self.model = deepcopy(model)
@@ -166,7 +167,8 @@ class Attributor:
         base_comp = trend
 
         self.non_attr_regressors = list(
-            set(self.full_regressors) - set(self.attr_regressors) - set(self.event_regressors)
+            set(self.full_regressors) - set(self.attr_regressors) - set(self.event_regressors) -
+            set(self.control_regressors)
         )
         if len(self.non_attr_regressors) > 0:
             non_attr_coef_matrix = model.get_coef_matrix(
@@ -186,12 +188,22 @@ class Attributor:
                 -1,
             )
 
-        event_coef_matrix = model.get_coef_matrix(
-            date_array=self.dt_array,
-            regressors=self.event_regressors,
-        )
-        event_regressor_matrix = self.df_bau.loc[:, self.event_regressors].values
-        base_comp += np.sum(event_coef_matrix * event_regressor_matrix, -1)
+        if len(self.event_regressors) > 0:
+            event_coef_matrix = model.get_coef_matrix(
+                date_array=self.dt_array,
+                regressors=self.event_regressors,
+            )
+            event_regressor_matrix = self.df_bau.loc[:, self.event_regressors].values
+            base_comp += np.sum(event_coef_matrix * event_regressor_matrix, -1)
+
+        if len(self.control_regressors) > 0:
+            control_coef_matrix = model.get_coef_matrix(
+                date_array=self.dt_array,
+                regressors=self.control_regressors,
+            )
+            control_regressor_matrix = np.log1p(self.df_bau.loc[:, self.control_regressors].values)
+            base_comp += np.sum(control_coef_matrix * control_regressor_matrix, -1)
+
         self.base_comp = base_comp
 
     def make_attribution(
