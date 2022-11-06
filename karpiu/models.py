@@ -46,7 +46,7 @@ class MMM:
             event_cols: Optional[List[str]] = None,
             seasonality: Optional[List[int]] = None,
             fs_orders: Optional[List[int]] = None,
-            total_market_sigma_prior: float = 0.35,
+            total_market_sigma_prior: float = 1.0,
             **kwargs
     ):
         """
@@ -284,6 +284,7 @@ class MMM:
             self,
             df: pd.DataFrame,
             extra_priors: Optional[pd.DataFrame] = None,
+            with_total_sigma_constraint: Optional[bool] = False,
             **kwargs
     ) -> None:
 
@@ -321,23 +322,16 @@ class MMM:
                     order=fs_order
                 )
 
-        logger.info("Build regression scheme")
+        logger.info("Build a default regression scheme")
         reg_scheme = pd.DataFrame()
-        # in this order
-        # self.spend_cols + self.fs_cols + self.event_cols + self.control_feat_cols 
+        # regressors should be in this order
+        # spend_cols + fs_cols + event_cols + control_feat_cols
         reg_scheme['regressor'] = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         reg_scheme['regressor_sign'] = \
             ["+"] * len(self.spend_cols) + ["="] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
-        # total coefficient size of spend cannot exceed 1.0; it's better to restrict sum of sigma ~ 0.3
-        n_spend_cols = len(self.spend_cols)
-        sigma_prior = self.total_market_sigma_prior/ n_spend_cols
-        logger.info("With total sigma prior {:.3f} and {} columns, set sigma prior {:.3f}.".format(
-            self.total_market_sigma_prior, n_spend_cols, sigma_prior
-        ))
-
         reg_scheme['regressor_sigma_prior'] = \
-            [sigma_prior] * n_spend_cols + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
+            [0.3] * len(self.spend_cols) + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme = reg_scheme.set_index('regressor')
 
         if extra_priors is not None:
@@ -348,10 +342,7 @@ class MMM:
                 reg_scheme.loc[test_channel, 'regressor_sigma_prior'] = row['sigma_prior']
             self.extra_priors = deepcopy(extra_priors)
 
-        self.regression_scheme = reg_scheme
-
         self._model = DLT(
-            # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=reg_scheme.index.tolist(),
             regressor_sign=reg_scheme['regressor_sign'].tolist(),
@@ -368,6 +359,58 @@ class MMM:
         )
         # self._model.fit(transform_df)
         self._model.fit(transform_df, point_method='median')
+
+        # run it again to use sigma constraint and weight by original coefficient size
+        if with_total_sigma_constraint:
+            reg_coef_dfs = self._model.get_regression_coefs().set_index("regressor")
+            logger.info(
+                "Build a regression scheme with total marketing sigma constraint {:.3f}".format(
+                    self.total_market_sigma_prior
+                )
+            )
+            reg_scheme = pd.DataFrame()
+            # regressors should be in this order
+            # spend_cols + fs_cols + event_cols + control_feat_cols
+            reg_scheme['regressor'] = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+            reg_scheme['regressor_sign'] = \
+                ["+"] * len(self.spend_cols) + ["="] * len(
+                    self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
+            reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
+            reg_scheme = reg_scheme.set_index('regressor')
+            n_spend_cols = len(self.spend_cols)
+            # make total market sigma weighted by original coef size
+            reg_coefs = reg_coef_dfs.loc[self.spend_cols, 'coefficient'].values
+            spend_sigma_prior = list(self.total_market_sigma_prior * reg_coefs / np.sum(reg_coefs))
+            reg_scheme['regressor_sigma_prior'] = \
+                spend_sigma_prior + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
+
+            if extra_priors is not None:
+                for idx, row in extra_priors.iterrows():
+                    test_channel = row['test_channel']
+                    logger.info("Updating {} prior".format(test_channel))
+                    reg_scheme.loc[test_channel, 'regressor_coef_prior'] = row['coef_prior']
+                    reg_scheme.loc[test_channel, 'regressor_sigma_prior'] = row['sigma_prior']
+                self.extra_priors = deepcopy(extra_priors)
+
+            self._model = DLT(
+                response_col=self.kpi_col,
+                regressor_col=reg_scheme.index.tolist(),
+                regressor_sign=reg_scheme['regressor_sign'].tolist(),
+                regressor_beta_prior=reg_scheme['regressor_coef_prior'].tolist(),
+                regressor_sigma_prior=reg_scheme['regressor_sigma_prior'].tolist(),
+                date_col=self.date_col,
+                estimator='stan-mcmc',
+                num_warmup=8000,
+                num_sample=4000,
+                # use small sigma for global trend as this is a long-term daily model
+                global_trend_sigma_prior=0.001,
+                **self.best_params,
+                **kwargs,
+            )
+            # self._model.fit(transform_df)
+            self._model.fit(transform_df, point_method='median')
+
+        self.regression_scheme = reg_scheme
 
     def predict(
             self,
