@@ -1,0 +1,6 @@
+site_name: karpiu
+site_url: https://example.com
+
+nav:
+  - Home: index.md
+  - Getting Started: getting_started.md
