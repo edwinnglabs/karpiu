@@ -4,7 +4,7 @@
 
 # Documentation
 
-For usage in details, users can refer to this [documentation](http://edwinng.com/karpiu/).
+For usage in details, users can refer to this [documentation](https://edwinng.com/karpiu/).
 
 # Installation
 
