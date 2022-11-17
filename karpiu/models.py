@@ -618,3 +618,6 @@ class MMM:
 
     def get_control_feat_cols(self):
         return deepcopy(self.control_feat_cols)
+
+    def get_raw_df(self):
+        return deepcopy(self.raw_df)
