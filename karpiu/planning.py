@@ -9,7 +9,7 @@ from .models import MMM
 import scipy.optimize as optim
 from copy import deepcopy
 
-from .explainer import Attributor
+from .explainability import Attributor
 from .utils import adstock_process
 
 

@@ -135,7 +135,7 @@ class MMM:
         self.best_params = {}
         self.tuning_df = None
 
-    def filter_features(self, df, **kwargs):
+    def filter_features(self, df: pd.DataFrame, **kwargs):
         logger.info("Screen events by Pr(coef>=0) >= 0.9 or Pr(coef>=0) <= 0.1.")
         transform_df = df.copy()
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
@@ -181,6 +181,14 @@ class MMM:
         # re-order regressors after events filtering
         self.regressors = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         self.regressors.sort()
+
+        logger.info("Full features: {}".format(self.full_event_cols + self.full_control_feat_cols))
+        logger.info("Selected features: {}".format(self.event_cols + self.control_feat_cols))
+
+    def set_features(self, features:List[str]):
+        """Instead of features selection, user can use this function to directly set features for fitting"""
+        self.event_cols = [x for x in features if x in self.full_event_cols]
+        self.control_feat_cols = [x for x in features if x in self.full_control_feat_cols]
 
         logger.info("Full features: {}".format(self.full_event_cols + self.full_control_feat_cols))
         logger.info("Selected features: {}".format(self.event_cols + self.control_feat_cols))
