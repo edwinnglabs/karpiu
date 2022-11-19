@@ -46,7 +46,8 @@ class MMM:
             event_cols: Optional[List[str]] = None,
             seasonality: Optional[List[int]] = None,
             fs_orders: Optional[List[int]] = None,
-            total_market_sigma_prior: float = 1.0,
+            total_market_sigma_prior: float = None,
+            default_spend_sigma_prior: float = 0.1,
             **kwargs
     ):
         """
@@ -67,6 +68,7 @@ class MMM:
         self.date_col = date_col
 
         self.spend_cols = deepcopy(spend_cols)
+        self.default_spend_sigma_prior = default_spend_sigma_prior
         self.spend_cols.sort()
         self.scalability_df = scalability_df
 
@@ -284,7 +286,6 @@ class MMM:
             self,
             df: pd.DataFrame,
             extra_priors: Optional[pd.DataFrame] = None,
-            with_total_sigma_constraint: Optional[bool] = False,
             **kwargs
     ) -> None:
 
@@ -331,16 +332,20 @@ class MMM:
             ["+"] * len(self.spend_cols) + ["="] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
         reg_scheme['regressor_sigma_prior'] = \
-            [0.3] * len(self.spend_cols) + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
+            [self.default_spend_sigma_prior] * len(self.spend_cols) + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme = reg_scheme.set_index('regressor')
-
+    
+        # replace original one with extra_priors if given
         if extra_priors is not None:
-            for idx, row in extra_priors.iterrows():
+            self.extra_priors = deepcopy(extra_priors)
+
+        # if extra_priors already set and doesn't get any from input, use the one attached in the object
+        if self.extra_priors is not None:
+            for idx, row in self.extra_priors.iterrows():
                 test_channel = row['test_channel']
                 logger.info("Updating {} prior".format(test_channel))
                 reg_scheme.loc[test_channel, 'regressor_coef_prior'] = row['coef_prior']
                 reg_scheme.loc[test_channel, 'regressor_sigma_prior'] = row['sigma_prior']
-            self.extra_priors = deepcopy(extra_priors)
 
         self._model = DLT(
             response_col=self.kpi_col,
@@ -357,11 +362,10 @@ class MMM:
             **self.best_params,
             **kwargs,
         )
-        # self._model.fit(transform_df)
         self._model.fit(transform_df, point_method='median')
 
         # run it again to use sigma constraint and weight by original coefficient size
-        if with_total_sigma_constraint:
+        if self.total_market_sigma_prior is not None:
             reg_coef_dfs = self._model.get_regression_coefs().set_index("regressor")
             logger.info(
                 "Build a regression scheme with total marketing sigma constraint {:.3f}".format(
@@ -384,13 +388,12 @@ class MMM:
             reg_scheme['regressor_sigma_prior'] = \
                 spend_sigma_prior + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
 
-            if extra_priors is not None:
-                for idx, row in extra_priors.iterrows():
+            if self.extra_priors is not None:
+                for idx, row in self.extra_priors.iterrows():
                     test_channel = row['test_channel']
                     logger.info("Updating {} prior".format(test_channel))
                     reg_scheme.loc[test_channel, 'regressor_coef_prior'] = row['coef_prior']
                     reg_scheme.loc[test_channel, 'regressor_sigma_prior'] = row['sigma_prior']
-                self.extra_priors = deepcopy(extra_priors)
 
             self._model = DLT(
                 response_col=self.kpi_col,
