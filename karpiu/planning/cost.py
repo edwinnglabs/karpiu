@@ -4,11 +4,12 @@ import pandas as pd
 from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 from typing import Optional, List, Union, Dict, Literal
-from ..models import MMM
 from copy import deepcopy
 import logging
-
 logger = logging.getLogger("karpiu-planning")
+
+from ..models import MMM
+from ..explainability import adstock_process
 
 class CostCurves:
     def __init__(
@@ -349,127 +350,128 @@ class CostCurves:
         fig.legend(handles, labels, loc=9, ncol=2, bbox_to_anchor=(0.5, 0), prop={'size': 18})
         fig.tight_layout()
 
-# def calculate_marginal_cost(
-#         model: MMM,
-#         channels: List[str],
-#         spend_start: str,
-#         spend_end: str,
-#         spend_df: Optional[pd.DataFrame] = None,
-#         delta: float = 1e-7,
-# ) -> pd.DataFrame:
-#     """ Generate overall marginal cost per channel with given period [spend_start, spend_end]
-#     Args:
-#         model:
-#         channels:
-#         spend_df:
-#         spend_start:
-#         spend_end:
-#         delta:
 
-#     Returns:
+def calculate_marginal_cost(
+        model: MMM,
+        channels: List[str],
+        spend_start: str,
+        spend_end: str,
+        spend_df: Optional[pd.DataFrame] = None,
+        delta: float = 1e-7,
+) -> pd.DataFrame:
+    """ Generate overall marginal cost per channel with given period [spend_start, spend_end]
+    Args:
+        model:
+        channels:
+        spend_df:
+        spend_start:
+        spend_end:
+        delta:
 
-#     """
-#     if spend_df is None:
-#         df = model.raw_df.copy()
-#     else:
-#         df = spend_df.copy()
+    Returns:
 
-#     date_col = model.date_col
-#     max_adstock = model.get_max_adstock()
-#     full_regressors = model.get_regressors()
-#     event_regressors = model.get_event_cols()
-#     control_regressors = model.get_control_feat_cols()
-#     sat_df = model.get_saturation()
+    """
+    if spend_df is None:
+        df = model.raw_df.copy()
+    else:
+        df = spend_df.copy()
 
-#     spend_start = pd.to_datetime(spend_start)
-#     spend_end = pd.to_datetime(spend_end)
-#     mea_start = spend_start
-#     mea_end = spend_end + pd.Timedelta(days=max_adstock)
-#     calc_start = spend_start - pd.Timedelta(days=max_adstock)
-#     calc_end = spend_end + pd.Timedelta(days=max_adstock)
+    date_col = model.date_col
+    max_adstock = model.get_max_adstock()
+    full_regressors = model.get_regressors()
+    event_regressors = model.get_event_cols()
+    control_regressors = model.get_control_feat_cols()
+    sat_df = model.get_saturation()
 
-#     spend_mask = (df[date_col] >= spend_start) & (df[date_col] <= spend_end)
-#     mea_mask = (df[date_col] >= mea_start) & (df[date_col] <= mea_end)
-#     calc_mask = (df[date_col] >= calc_start) & (df[date_col] <= calc_end)
+    spend_start = pd.to_datetime(spend_start)
+    spend_end = pd.to_datetime(spend_end)
+    mea_start = spend_start
+    mea_end = spend_end + pd.Timedelta(days=max_adstock)
+    calc_start = spend_start - pd.Timedelta(days=max_adstock)
+    calc_end = spend_end + pd.Timedelta(days=max_adstock)
 
-#     dummy_pred_df = model.predict(df=df, decompose=True)
-#     # log scale (mea_steps, )
-#     trend = dummy_pred_df.loc[mea_mask, 'trend'].values
-#     # seas = dummy_pred_df.loc[mea_mask, 'weekly seasonality'].values
-#     # base_comp = trend + seas
-#     base_comp = trend
+    spend_mask = (df[date_col] >= spend_start) & (df[date_col] <= spend_end)
+    mea_mask = (df[date_col] >= mea_start) & (df[date_col] <= mea_end)
+    calc_mask = (df[date_col] >= calc_start) & (df[date_col] <= calc_end)
 
-#     # background regressors
-#     bg_regressors = list(
-#         set(full_regressors) - set(channels) - set(event_regressors) - set(control_regressors)
-#     )
+    dummy_pred_df = model.predict(df=df, decompose=True)
+    # log scale (mea_steps, )
+    trend = dummy_pred_df.loc[mea_mask, 'trend'].values
+    # seas = dummy_pred_df.loc[mea_mask, 'weekly seasonality'].values
+    # base_comp = trend + seas
+    base_comp = trend
 
-#     if len(bg_regressors) > 0:
-#         # (n_regressors, )
-#         bg_coef_array = model.get_coef_vector(regressors=bg_regressors)
-#         # (n_regressors, )
-#         bg_sat_array = sat_df.loc[bg_regressors, 'saturation'].values
-#         # (calc_steps, n_regressors)
-#         bg_regressor_matrix = df.loc[calc_mask, bg_regressors].values
-#         bg_adstock_filter_matrix = model.get_adstock_matrix(bg_regressors)
-#         # (mea_steps, n_regressors)
-#         bg_adstock_regressor_matrix = adstock_process(
-#             bg_regressor_matrix,
-#             bg_adstock_filter_matrix,
-#         )
+    # background regressors
+    bg_regressors = list(
+        set(full_regressors) - set(channels) - set(event_regressors) - set(control_regressors)
+    )
 
-#         base_comp += np.sum(
-#             bg_coef_array * np.log1p(bg_adstock_regressor_matrix / bg_sat_array),
-#             -1,
-#         )
+    if len(bg_regressors) > 0:
+        # (n_regressors, )
+        bg_coef_array = model.get_coef_vector(regressors=bg_regressors)
+        # (n_regressors, )
+        bg_sat_array = sat_df.loc[bg_regressors, 'saturation'].values
+        # (calc_steps, n_regressors)
+        bg_regressor_matrix = df.loc[calc_mask, bg_regressors].values
+        bg_adstock_filter_matrix = model.get_adstock_matrix(bg_regressors)
+        # (mea_steps, n_regressors)
+        bg_adstock_regressor_matrix = adstock_process(
+            bg_regressor_matrix,
+            bg_adstock_filter_matrix,
+        )
 
-#     if len(event_regressors) > 0:
-#         event_coef_array = model.get_coef_vector(regressors=event_regressors)
-#         # (mea_steps, n_regressors)
-#         event_regressor_matrix = df.loc[mea_mask, event_regressors].values
-#         base_comp += np.sum(event_coef_array * event_regressor_matrix, -1)
+        base_comp += np.sum(
+            bg_coef_array * np.log1p(bg_adstock_regressor_matrix / bg_sat_array),
+            -1,
+        )
 
-#     if len(control_regressors) > 0:
-#         control_coef_array = model.get_coef_vector(regressors=control_regressors)
-#         # (mea_steps, n_regressors)
-#         control_regressor_matrix = np.log1p(df.loc[mea_mask, control_regressors].values)
-#         base_comp += np.sum(control_coef_array * control_regressor_matrix, -1)
+    if len(event_regressors) > 0:
+        event_coef_array = model.get_coef_vector(regressors=event_regressors)
+        # (mea_steps, n_regressors)
+        event_regressor_matrix = df.loc[mea_mask, event_regressors].values
+        base_comp += np.sum(event_coef_array * event_regressor_matrix, -1)
 
-#     # base_comp calculation finished above
-#     # the varying comp is computed below
-#     attr_regressor_matrix = df.loc[calc_mask, channels].values
-#     attr_coef_array = model.get_coef_vector(regressors=channels)
-#     attr_sat_array = sat_df.loc[channels, 'saturation'].values
-#     attr_adstock_matrix = model.get_adstock_matrix(channels)
-#     attr_adstock_regressor_matrix = adstock_process(
-#         attr_regressor_matrix,
-#         attr_adstock_matrix
-#     )
-#     # log scale
-#     attr_comp = np.sum(
-#         attr_coef_array * np.log1p(attr_adstock_regressor_matrix / attr_sat_array),
-#         -1,
-#     )
-#     mcac = np.empty(len(channels))
-#     for idx, ch in enumerate(channels):
-#         # (calc_steps, n_regressors)
-#         delta_matrix = np.zeros_like(attr_regressor_matrix)
-#         delta_matrix[max_adstock:-max_adstock, idx] = delta
-#         # (calc_steps, n_regressors)
-#         new_attr_regressor_matrix = attr_regressor_matrix + delta_matrix
-#         new_attr_adstock_regressor_matrix = adstock_process(
-#             new_attr_regressor_matrix,
-#             attr_adstock_matrix
-#         )
-#         new_attr_comp = np.sum(
-#             attr_coef_array * np.log1p(new_attr_adstock_regressor_matrix / attr_sat_array),
-#             -1,
-#         )
+    if len(control_regressors) > 0:
+        control_coef_array = model.get_coef_vector(regressors=control_regressors)
+        # (mea_steps, n_regressors)
+        control_regressor_matrix = np.log1p(df.loc[mea_mask, control_regressors].values)
+        base_comp += np.sum(control_coef_array * control_regressor_matrix, -1)
 
-#         m_acq = np.exp(base_comp) * (np.exp(new_attr_comp) - np.exp(attr_comp))
-#         mcac[idx] = np.sum(delta_matrix) / np.sum(m_acq)
+    # base_comp calculation finished above
+    # the varying comp is computed below
+    attr_regressor_matrix = df.loc[calc_mask, channels].values
+    attr_coef_array = model.get_coef_vector(regressors=channels)
+    attr_sat_array = sat_df.loc[channels, 'saturation'].values
+    attr_adstock_matrix = model.get_adstock_matrix(channels)
+    attr_adstock_regressor_matrix = adstock_process(
+        attr_regressor_matrix,
+        attr_adstock_matrix
+    )
+    # log scale
+    attr_comp = np.sum(
+        attr_coef_array * np.log1p(attr_adstock_regressor_matrix / attr_sat_array),
+        -1,
+    )
+    mcac = np.empty(len(channels))
+    for idx, ch in enumerate(channels):
+        # (calc_steps, n_regressors)
+        delta_matrix = np.zeros_like(attr_regressor_matrix)
+        delta_matrix[max_adstock:-max_adstock, idx] = delta
+        # (calc_steps, n_regressors)
+        new_attr_regressor_matrix = attr_regressor_matrix + delta_matrix
+        new_attr_adstock_regressor_matrix = adstock_process(
+            new_attr_regressor_matrix,
+            attr_adstock_matrix
+        )
+        new_attr_comp = np.sum(
+            attr_coef_array * np.log1p(new_attr_adstock_regressor_matrix / attr_sat_array),
+            -1,
+        )
 
-#     return pd.DataFrame({
-#         "regressor": channels,
-#         "mcac": mcac,
-#     }).set_index("regressor")
+        m_acq = np.exp(base_comp) * (np.exp(new_attr_comp) - np.exp(attr_comp))
+        mcac[idx] = np.sum(delta_matrix) / np.sum(m_acq)
+
+    return pd.DataFrame({
+        "regressor": channels,
+        "mcac": mcac,
+    }).set_index("regressor")
