@@ -6,7 +6,6 @@ install-dev:
 
 format:
 	black .
-	isot .
 
 lint:
 	flake8
