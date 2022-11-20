@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "karpiu"
+version = "0.0.1"
+description = "this is a package designed for building marketing mix model"
+authors = ["Edwin Ng <edwinnglabs@gmail.com"]
+readme = "README.md"
+homepage = "https://edwinng.com/karpiu/"
+repository = "https://github.com/edwinnglabs/karpiu"
+keywords = ["marketing", "marketing mix modeling", "budget optimization"]
+
+[tool.poetry.dependencies]
+python = ">=3.8, <3.10"
+pandas = "~1.4.2"
+numpy = ">=1.18.2, <=1.22.2"
+holidays = "^0.14.2"
+orbit-ml = { git = "https://github.com/uber/orbit.git", branch = "dev" }
+torch = "^1.11.0"
+tqdm = "^4.64.0"
+ipywidgets = "^8.0.2"
+arviz = "^0.12.1"
+matplotlib = "^3.5.2"
+scipy = "^1.8.1"
