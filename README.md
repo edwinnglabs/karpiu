@@ -1,4 +1,4 @@
-[![Formatting](https://github.com/edwinnglabs/karpiu/actions/workflows/formatting.yaml/badge.svg)](https://github.com/edwinnglabs/karpiu/actions/workflows/formatting.yaml)
+[![format](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml/badge.svg)](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml)
 
 # Karpiu
 
