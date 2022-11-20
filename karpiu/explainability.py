@@ -27,14 +27,14 @@ class Attributor:
     """
 
     def __init__(
-            self,
-            model: MMM,
-            attr_regressors: Optional[List[str]] = None,
-            start: Optional[str] = None,
-            end: Optional[str] = None,
-            df: Optional[pd.DataFrame] = None,
-            kpi_name: Optional[str] = None,
-            verbose: bool = False,
+        self,
+        model: MMM,
+        attr_regressors: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        df: Optional[pd.DataFrame] = None,
+        kpi_name: Optional[str] = None,
+        verbose: bool = False,
     ):
         """
 
@@ -95,30 +95,48 @@ class Attributor:
         self.calc_end = self.attr_end + pd.Timedelta(days=self.max_adstock)
 
         if verbose:
-            print('Full calculation start={} and end={}'.format(
-                self.calc_start.strftime('%Y-%m-%d'), self.calc_end.strftime('%Y-%m-%d')))
-            print('Attribution start={} and end={}'.format(
-                self.attr_start.strftime('%Y-%m-%d'), self.attr_end.strftime('%Y-%m-%d')))
+            print(
+                "Full calculation start={} and end={}".format(
+                    self.calc_start.strftime("%Y-%m-%d"),
+                    self.calc_end.strftime("%Y-%m-%d"),
+                )
+            )
+            print(
+                "Attribution start={} and end={}".format(
+                    self.attr_start.strftime("%Y-%m-%d"),
+                    self.attr_end.strftime("%Y-%m-%d"),
+                )
+            )
 
         if self.calc_start < df[date_col].min():
-            raise Exception('Dataframe provided starts at {} must be before {} due to max_adstock={}'.format(
-                df[date_col].iloc[0], self.calc_start, self.max_adstock))
+            raise Exception(
+                "Dataframe provided starts at {} must be before {} due to max_adstock={}".format(
+                    df[date_col].iloc[0], self.calc_start, self.max_adstock
+                )
+            )
 
         if self.calc_end > df[date_col].max():
-            raise Exception('Dataframe provided ends at {} must be after {} due to max_adstock={}'.format(
-                df[date_col].iloc[-1], self.calc_end, self.max_adstock))
+            raise Exception(
+                "Dataframe provided ends at {} must be after {} due to max_adstock={}".format(
+                    df[date_col].iloc[-1], self.calc_end, self.max_adstock
+                )
+            )
         # set a business-as-usual case data frame
         self.df_bau = df.loc[
             (df[date_col] >= self.calc_start) & (df[date_col] <= self.calc_end),
-            [date_col, self.kpi_col] + self.full_regressors
+            [date_col, self.kpi_col] + self.full_regressors,
         ].reset_index(drop=True)
         self.dt_array = self.df_bau[date_col].values
 
         # just make sure attr_regressors input by user align original all regressors order
         attr_regressors_idx = [
-            idx for idx in range(len(self.full_regressors)) if self.full_regressors[idx] in self.attr_regressors
+            idx
+            for idx in range(len(self.full_regressors))
+            if self.full_regressors[idx] in self.attr_regressors
         ]
-        self.attr_regressors = [self.full_regressors[idx] for idx in attr_regressors_idx]
+        self.attr_regressors = [
+            self.full_regressors[idx] for idx in attr_regressors_idx
+        ]
 
         # prepare a few matrices and arrays for rest of the calculations
         # required matrices and arrays such as saturation, adstock, regressors matrix etc.
@@ -128,7 +146,7 @@ class Attributor:
         self.attr_regressor_matrix = self.df_bau[self.attr_regressors].values
         # (n_regressors, )
         sat_df = model.get_saturation()
-        self.attr_sat_array = sat_df.loc[self.attr_regressors, 'saturation'].values
+        self.attr_sat_array = sat_df.loc[self.attr_regressors, "saturation"].values
 
         # adstock_regressor_matrix dim: time x num of regressors
         if self.max_adstock >= 1:
@@ -138,10 +156,15 @@ class Attributor:
             )
             # we lose first n(=max_adstock) observations; to maintain original dimension,
             # we need to pad zeros n(=max_adstock) time
-            self.attr_adstock_regressor_matrix = np.concatenate((
-                np.zeros((self.max_adstock, self.attr_adstock_regressor_matrix.shape[1])),
-                self.attr_adstock_regressor_matrix
-            ), 0)
+            self.attr_adstock_regressor_matrix = np.concatenate(
+                (
+                    np.zeros(
+                        (self.max_adstock, self.attr_adstock_regressor_matrix.shape[1])
+                    ),
+                    self.attr_adstock_regressor_matrix,
+                ),
+                0,
+            )
         else:
             self.attr_adstock_regressor_matrix = deepcopy(self.attr_regressor_matrix)
         self.attr_coef_matrix = model.get_coef_matrix(
@@ -156,10 +179,10 @@ class Attributor:
         # (n_steps, )
         zero_pred_df = model.predict(df=df_zero, decompose=True)
         # log scale
-        trend = zero_pred_df['trend'].values
+        trend = zero_pred_df["trend"].values
         # seas = zero_pred_df['weekly seasonality'].values
         # original scale
-        self.pred_zero = zero_pred_df['prediction'].values
+        self.pred_zero = zero_pred_df["prediction"].values
         # dependent on the coefficients (can be specified by users in next step)
         self.pred_bau = None
 
@@ -167,24 +190,38 @@ class Attributor:
         base_comp = trend
 
         self.non_attr_regressors = list(
-            set(self.full_regressors) - set(self.attr_regressors) - set(self.event_regressors) -
-            set(self.control_regressors)
+            set(self.full_regressors)
+            - set(self.attr_regressors)
+            - set(self.event_regressors)
+            - set(self.control_regressors)
         )
         if len(self.non_attr_regressors) > 0:
             non_attr_coef_matrix = model.get_coef_matrix(
                 date_array=self.dt_array,
                 regressors=self.non_attr_regressors,
             )
-            non_attr_sat_array = sat_df.loc[self.non_attr_regressors, 'saturation'].values
-            non_attr_regressor_matrix = self.df_bau.loc[:, self.non_attr_regressors].values
+            non_attr_sat_array = sat_df.loc[
+                self.non_attr_regressors, "saturation"
+            ].values
+            non_attr_regressor_matrix = self.df_bau.loc[
+                :, self.non_attr_regressors
+            ].values
             non_attr_adstock_matrix = model.get_adstock_matrix(self.non_attr_regressors)
-            non_attr_adstock_regressor_matrix = adstock_process(non_attr_regressor_matrix, non_attr_adstock_matrix)
-            non_attr_adstock_regressor_matrix = np.concatenate((
-                np.zeros((self.max_adstock, non_attr_adstock_regressor_matrix.shape[1])),
-                non_attr_adstock_regressor_matrix
-            ), 0)
+            non_attr_adstock_regressor_matrix = adstock_process(
+                non_attr_regressor_matrix, non_attr_adstock_matrix
+            )
+            non_attr_adstock_regressor_matrix = np.concatenate(
+                (
+                    np.zeros(
+                        (self.max_adstock, non_attr_adstock_regressor_matrix.shape[1])
+                    ),
+                    non_attr_adstock_regressor_matrix,
+                ),
+                0,
+            )
             base_comp += np.sum(
-                non_attr_coef_matrix * np.log1p(non_attr_adstock_regressor_matrix / non_attr_sat_array),
+                non_attr_coef_matrix
+                * np.log1p(non_attr_adstock_regressor_matrix / non_attr_sat_array),
                 -1,
             )
 
@@ -201,19 +238,21 @@ class Attributor:
                 date_array=self.dt_array,
                 regressors=self.control_regressors,
             )
-            control_regressor_matrix = np.log1p(self.df_bau.loc[:, self.control_regressors].values)
+            control_regressor_matrix = np.log1p(
+                self.df_bau.loc[:, self.control_regressors].values
+            )
             base_comp += np.sum(control_coef_matrix * control_regressor_matrix, -1)
 
         self.base_comp = base_comp
 
     def make_attribution(
-            self,
-            new_coef_name: Optional[str] = None,
-            new_coef: Optional[float] = None,
-            true_up: bool = True
+        self,
+        new_coef_name: Optional[str] = None,
+        new_coef: Optional[float] = None,
+        true_up: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        A general time-based attribution on stat-space model with regression. This is 
+        A general time-based attribution on stat-space model with regression. This is
         much faster than the legacy method.
 
 
@@ -238,13 +277,17 @@ class Attributor:
                     attr_coef_matrix[:, idx] = new_coef
                     break
             if not coef_search_found:
-                raise Exception("New coefficient name does not match any regressors in the model.")
+                raise Exception(
+                    "New coefficient name does not match any regressors in the model."
+                )
         # TODO: consider update the prediction function such that the shape of the prediction is the same as the input
         # modified coef matrix would impact this prediction vector
         # prediction with full spend in business-as-usual case
         # NOTE: this vector has less length (a `max_adstock` shift from the beginning)
         varying_comp = np.sum(
-            attr_coef_matrix * np.log1p(self.attr_adstock_regressor_matrix / self.attr_sat_array), -1
+            attr_coef_matrix
+            * np.log1p(self.attr_adstock_regressor_matrix / self.attr_sat_array),
+            -1,
         )
         # (n_steps + 2 * max_adstock, ); already tested value is the same as model.predict()
         self.pred_bau = np.exp(self.base_comp + varying_comp)
@@ -267,40 +310,46 @@ class Attributor:
 
         # note that activities based attribution only makes sense when spend is fully settled after adstock process
         # hence first n(=max_adstock) need to be discarded
-        activities_attr_df = df_bau[self.max_adstock:].reset_index(drop=True)
+        activities_attr_df = df_bau[self.max_adstock :].reset_index(drop=True)
         activities_attr_df = activities_attr_df[[date_col]]
-        activities_attr_df[['organic'] + self.attr_regressors] = activities_attr_matrix[self.max_adstock:]
+        activities_attr_df[["organic"] + self.attr_regressors] = activities_attr_matrix[
+            self.max_adstock :
+        ]
 
         # note that spend attribution only makes sense when all attributing metric fully observed in the entire
         # adstock process
         # also need to discard first n(=max_adstock) observation as you cannot observe the correct pred_bau
         # hence last n(=max_adstock) need to be discarded
-        spend_attr_df = df_bau[self.max_adstock:-self.max_adstock].reset_index(drop=True)
+        spend_attr_df = df_bau[self.max_adstock : -self.max_adstock].reset_index(
+            drop=True
+        )
         spend_attr_df = spend_attr_df[[date_col]]
-        spend_attr_df[['organic'] + self.attr_regressors] = spend_attr_matrix[self.max_adstock:-self.max_adstock]
+        spend_attr_df[["organic"] + self.attr_regressors] = spend_attr_matrix[
+            self.max_adstock : -self.max_adstock
+        ]
 
-        spend_df = df_bau[self.max_adstock:-self.max_adstock].reset_index(drop=True)
+        spend_df = df_bau[self.max_adstock : -self.max_adstock].reset_index(drop=True)
         spend_df = spend_df[[date_col] + self.attr_regressors]
 
         cost_df = spend_df[[date_col]].copy()
         cost_df[self.attr_regressors] = (
-                spend_df[self.attr_regressors] / spend_attr_df[self.attr_regressors]
+            spend_df[self.attr_regressors] / spend_attr_df[self.attr_regressors]
         )
 
         return activities_attr_df, spend_attr_df, spend_df, cost_df
 
 
 def make_attribution_numpy(
-        coef_matrix: np.array,
-        regressor_matrix: np.array,
-        adstock_regressor_matrix: np.array,
-        pred_bau: np.array,
-        pred_zero: np.array,
-        adstock_matrix: np.array,
-        saturation_array: np.array,
-        true_up_arr: np.array,
+    coef_matrix: np.array,
+    regressor_matrix: np.array,
+    adstock_regressor_matrix: np.array,
+    pred_bau: np.array,
+    pred_zero: np.array,
+    adstock_matrix: np.array,
+    saturation_array: np.array,
+    true_up_arr: np.array,
 ) -> Tuple[np.array, np.array]:
-    """ A numpy version of making attribution
+    """A numpy version of making attribution
 
     Notes
     -----
@@ -330,11 +379,7 @@ def make_attribution_numpy(
     max_adstock = adstock_matrix.shape[1] - 1
 
     # (n_steps, max_adstock + 1, n_regressors + 1)
-    delta_matrix = np.zeros((
-        n_steps,
-        max_adstock + 1,
-        n_regressors + 1
-    ))
+    delta_matrix = np.zeros((n_steps, max_adstock + 1, n_regressors + 1))
 
     # a same size of matrix declared to prepare paid date dimension
     # (n_steps, max_adstock + 1, n_regressors + 1)
@@ -374,34 +419,38 @@ def make_attribution_numpy(
             temp_attr_regressor_zero[j] = 0
             # (n_steps - max_adstock, )
             temp_attr_regressor_zero = np.squeeze(
-                adstock_process(temp_attr_regressor_zero, temp_adstock_filter),
-                -1
+                adstock_process(temp_attr_regressor_zero, temp_adstock_filter), -1
             )
             # pad zeros; since both bau and set-zero condition yields the same number in the
             # zero-padding period, the delta ends up to be (constant x (1 - 1 / 1)) =  0
             # it yields the same result as legacy version.
             if max_adstock > 0:
                 # (n_steps, )
-                temp_attr_regressor_zero = np.concatenate((
-                    np.zeros(max_adstock),
-                    temp_attr_regressor_zero
-                ))
+                temp_attr_regressor_zero = np.concatenate(
+                    (np.zeros(max_adstock), temp_attr_regressor_zero)
+                )
 
             # measure impact from j to j + max_adstock only
             # (max_adstock + 1, )
-            coef_array = coef_matrix[j:(j + max_adstock + 1), i]
+            coef_array = coef_matrix[j : (j + max_adstock + 1), i]
 
             # compute the delta who is the ratio between lift of bau spend and zero spend at time j
             # (max_adstock + 1, )
-            numerator = (1 + temp_attr_regressor_zero[j:(j + max_adstock + 1)] /
-                         saturation_array[i]) ** coef_array
+            numerator = (
+                1
+                + temp_attr_regressor_zero[j : (j + max_adstock + 1)]
+                / saturation_array[i]
+            ) ** coef_array
             # (max_adstock + 1, )
-            denominator = (1 + temp_bau_regressor_adstock[j:(j + max_adstock + 1)] /
-                           saturation_array[i]) ** coef_array
+            denominator = (
+                1
+                + temp_bau_regressor_adstock[j : (j + max_adstock + 1)]
+                / saturation_array[i]
+            ) ** coef_array
 
-            delta = pred_bau[j:(j + max_adstock + 1)] * (1 - numerator / denominator)
+            delta = pred_bau[j : (j + max_adstock + 1)] * (1 - numerator / denominator)
             # (n_steps, max_adstock + 1)
-            temp_delta_matrix[j, 0:len(delta)] = delta
+            temp_delta_matrix[j, 0 : len(delta)] = delta
 
         # so far what does delta matrix tell us?
         # it is the delta on each channel, each time spend turn off, its effect on each adstock
@@ -413,7 +462,9 @@ def make_attribution_numpy(
         # note that the first dimension is dedicated to organic in i dimension; so index from left need to be
         # shifted one up
         if max_adstock > 0:
-            delta_matrix[:, :, i + 1] = np_shift(temp_delta_matrix, np.arange(max_adstock + 1))
+            delta_matrix[:, :, i + 1] = np_shift(
+                temp_delta_matrix, np.arange(max_adstock + 1)
+            )
         else:
             delta_matrix[:, :, i + 1] = temp_delta_matrix
 
@@ -443,7 +494,8 @@ def make_attribution_numpy(
     if max_adstock > 0:
         for idx in range(full_attr_matrix.shape[2]):
             paid_on_attr_matrix[:, :, idx] = np_shift(
-                full_attr_matrix[:, :, idx], np.arange(0, -1 * (max_adstock + 1), -1))
+                full_attr_matrix[:, :, idx], np.arange(0, -1 * (max_adstock + 1), -1)
+            )
     else:
         paid_on_attr_matrix = deepcopy(full_attr_matrix)
 
@@ -452,6 +504,7 @@ def make_attribution_numpy(
     spend_attr_matrix = np.sum(paid_on_attr_matrix, axis=1)
 
     return activities_attr_matrix, spend_attr_matrix
+
 
 # deprecated
 # def extract_adstock_matrix(adstock_df, regressor):

@@ -12,8 +12,8 @@ matplotlib >=3.5.2
 scipy>=1.8.1
 pystan==2.19.1.1
 # install orbit from dev
-orbit-ml>=1.1.2
-git+ssh://git@github.com:uber/orbit.git@dev
+# orbit-ml>=1.1.2
+# orbit-ml @ git+https://github.com/uber/orbit.git@dev
 
 # torch
 # tableone

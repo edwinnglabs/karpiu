@@ -36,19 +36,19 @@ class MMM:
     """
 
     def __init__(
-            self,
-            kpi_col: str,
-            date_col: str,
-            spend_cols: List[str],
-            adstock_df: pd.DataFrame,
-            scalability_df: Optional[pd.DataFrame] = None,
-            control_feat_cols: Optional[List[str]] = None,
-            event_cols: Optional[List[str]] = None,
-            seasonality: Optional[List[int]] = None,
-            fs_orders: Optional[List[int]] = None,
-            total_market_sigma_prior: float = None,
-            default_spend_sigma_prior: float = 0.1,
-            **kwargs
+        self,
+        kpi_col: str,
+        date_col: str,
+        spend_cols: List[str],
+        adstock_df: pd.DataFrame,
+        scalability_df: Optional[pd.DataFrame] = None,
+        control_feat_cols: Optional[List[str]] = None,
+        event_cols: Optional[List[str]] = None,
+        seasonality: Optional[List[int]] = None,
+        fs_orders: Optional[List[int]] = None,
+        total_market_sigma_prior: float = None,
+        default_spend_sigma_prior: float = 0.1,
+        **kwargs
     ):
         """
         Args:
@@ -113,8 +113,8 @@ class MMM:
             for s, fs in zip(self.seasonality, self.fs_orders):
                 fs_cols = list()
                 for x in range(1, fs + 1):
-                    fs_cols.append('s{}_fs_cos{}'.format(s, x))
-                    fs_cols.append('s{}_fs_sin{}'.format(s, x))
+                    fs_cols.append("s{}_fs_cos{}".format(s, x))
+                    fs_cols.append("s{}_fs_sin{}".format(s, x))
                 fs_cols.sort()
                 self.fs_cols_flatten += fs_cols
                 self.fs_cols.append(fs_cols)
@@ -122,7 +122,12 @@ class MMM:
         self.raw_df = None
 
         # for attribution purpose; keep tracking on different types of regressors
-        self.regressors = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+        self.regressors = (
+            self.spend_cols
+            + self.fs_cols_flatten
+            + self.event_cols
+            + self.control_feat_cols
+        )
         self.regressors.sort()
         self.saturation_df = None
         self.adstock_df = adstock_df
@@ -139,15 +144,14 @@ class MMM:
         logger.info("Screen events by Pr(coef>=0) >= 0.9 or Pr(coef>=0) <= 0.1.")
         transform_df = df.copy()
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
-        transform_df[self.full_control_feat_cols] = np.log1p(transform_df[self.full_control_feat_cols])
+        transform_df[self.full_control_feat_cols] = np.log1p(
+            transform_df[self.full_control_feat_cols]
+        )
 
         if len(self.fs_orders) > 0:
             for s, fs_order in zip(self.seasonality, self.fs_orders):
                 transform_df, _ = make_fourier_series_df(
-                    transform_df,
-                    prefix="s{}_".format(s),
-                    period=s,
-                    order=fs_order
+                    transform_df, prefix="s{}_".format(s), period=s, order=fs_order
                 )
 
         # exclude spend cols in the extra features screening
@@ -160,7 +164,7 @@ class MMM:
             regressor_sigma_prior=[10.0] * len(regressor_cols),
             date_col=self.date_col,
             # uses mcmc for high dimensional features selection
-            estimator='stan-mcmc',
+            estimator="stan-mcmc",
             # a safe setting for fast regression; will estimate this in final model
             level_sm_input=0.001,
             # slope_sm_input=0.01,
@@ -173,43 +177,60 @@ class MMM:
         )
         temp_dlt.fit(transform_df)
         coef_df = temp_dlt.get_regression_coefs()
-        mask = (coef_df['Pr(coef >= 0)'] >= 0.9) | (coef_df['Pr(coef >= 0)'] <= 0.1)
-        selected_feats = coef_df.loc[mask, 'regressor'].values
+        mask = (coef_df["Pr(coef >= 0)"] >= 0.9) | (coef_df["Pr(coef >= 0)"] <= 0.1)
+        selected_feats = coef_df.loc[mask, "regressor"].values
         self.event_cols = [x for x in selected_feats if x in self.full_event_cols]
-        self.control_feat_cols = [x for x in selected_feats if x in self.full_control_feat_cols]
+        self.control_feat_cols = [
+            x for x in selected_feats if x in self.full_control_feat_cols
+        ]
 
         # re-order regressors after events filtering
-        self.regressors = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+        self.regressors = (
+            self.spend_cols
+            + self.fs_cols_flatten
+            + self.event_cols
+            + self.control_feat_cols
+        )
         self.regressors.sort()
 
-        logger.info("Full features: {}".format(self.full_event_cols + self.full_control_feat_cols))
-        logger.info("Selected features: {}".format(self.event_cols + self.control_feat_cols))
+        logger.info(
+            "Full features: {}".format(
+                self.full_event_cols + self.full_control_feat_cols
+            )
+        )
+        logger.info(
+            "Selected features: {}".format(self.event_cols + self.control_feat_cols)
+        )
 
-    def set_features(self, features:List[str]):
+    def set_features(self, features: List[str]):
         """Instead of features selection, user can use this function to directly set features for fitting"""
         self.event_cols = [x for x in features if x in self.full_event_cols]
-        self.control_feat_cols = [x for x in features if x in self.full_control_feat_cols]
+        self.control_feat_cols = [
+            x for x in features if x in self.full_control_feat_cols
+        ]
 
-        logger.info("Full features: {}".format(self.full_event_cols + self.full_control_feat_cols))
-        logger.info("Selected features: {}".format(self.event_cols + self.control_feat_cols))
+        logger.info(
+            "Full features: {}".format(
+                self.full_event_cols + self.full_control_feat_cols
+            )
+        )
+        logger.info(
+            "Selected features: {}".format(self.event_cols + self.control_feat_cols)
+        )
 
     def optim_hyper_params(
-            self,
-            df: pd.DataFrame,
-            param_grid: Optional[Dict[str, Any]] = None,
-            **kwargs
+        self, df: pd.DataFrame, param_grid: Optional[Dict[str, Any]] = None, **kwargs
     ) -> None:
-        logger.info("Optimize smoothing params. Only events and seasonality are involved.")
+        logger.info(
+            "Optimize smoothing params. Only events and seasonality are involved."
+        )
         transform_df = df.copy()
         logger.info("Pre-process data.")
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
         if len(self.fs_orders) > 0:
             for s, fs_order in zip(self.seasonality, self.fs_orders):
                 transform_df, _ = make_fourier_series_df(
-                    transform_df,
-                    prefix="s{}_".format(s),
-                    period=s,
-                    order=fs_order
+                    transform_df, prefix="s{}_".format(s), period=s, order=fs_order
                 )
 
         # some choices for hyper-parameters gird search
@@ -218,7 +239,7 @@ class MMM:
             param_grid = {
                 "slope_sm_input": list(1 - np.linspace(0.9057, 0.9755, 3)),
                 "level_sm_input": list(1 - np.linspace(0.9755, 0.9962, 5)),
-                "damped_factor":  list(np.linspace(0.9057, 0.9923, 3)),
+                "damped_factor": list(np.linspace(0.9057, 0.9923, 3)),
             }
 
         regressors = self.fs_cols_flatten + self.event_cols + self.control_feat_cols
@@ -232,7 +253,7 @@ class MMM:
             date_col=self.date_col,
             # 4 weeks
             forecast_horizon=28,
-            estimator='stan-map',
+            estimator="stan-map",
             verbose=False,
             # use small sigma for global trend as this is a long-term daily model
             global_trend_sigma_prior=0.001,
@@ -257,44 +278,42 @@ class MMM:
         for k, v in self.best_params.items():
             logger.info("Best params {} set as {:.5f}".format(k, v))
 
-    def set_hyper_params(
-            self,
-            params: Dict[str, List]
-    ) -> None:
+    def set_hyper_params(self, params: Dict[str, List]) -> None:
         logger.info("Set hyper-parameters.")
         self.best_params.update(params)
         for k, v in self.best_params.items():
             logger.info("Best params {} set as {:.5f}".format(k, v))
 
     def _derive_saturation(
-            self,
-            df: pd.DataFrame,
+        self,
+        df: pd.DataFrame,
     ) -> None:
         # rebuild a base everytime it fits data
         self.saturation_df = (
             df[self.spend_cols].apply(non_zero_quantile, q=0.5).reset_index()
-        ).rename(columns={'index': 'regressor', 0: 'saturation_base'})
-        if set(self.spend_cols) != set(self.scalability_df['regressor'].tolist()):
-            raise Exception("Regressors between saturation based and scalability df are not perfectly matching.")
+        ).rename(columns={"index": "regressor", 0: "saturation_base"})
+        if set(self.spend_cols) != set(self.scalability_df["regressor"].tolist()):
+            raise Exception(
+                "Regressors between saturation based and scalability df are not perfectly matching."
+            )
         # left join the base with the condition
         self.saturation_df = pd.merge(
             self.saturation_df,
             self.scalability_df,
-            on='regressor',
-            how='left',
+            on="regressor",
+            how="left",
         )
         # multiply the condition
-        scalability = self.saturation_df['scalability'].values
-        self.saturation_df['saturation'] = self.saturation_df['saturation_base'] * scalability
+        scalability = self.saturation_df["scalability"].values
+        self.saturation_df["saturation"] = (
+            self.saturation_df["saturation_base"] * scalability
+        )
         if np.any(scalability < 0):
             raise Exception("All spend scalability needs to be > 0.")
-        self.saturation_df = self.saturation_df.set_index('regressor')
+        self.saturation_df = self.saturation_df.set_index("regressor")
 
     def fit(
-            self,
-            df: pd.DataFrame,
-            extra_priors: Optional[pd.DataFrame] = None,
-            **kwargs
+        self, df: pd.DataFrame, extra_priors: Optional[pd.DataFrame] = None, **kwargs
     ) -> None:
 
         logger.info("Fit final model.")
@@ -302,9 +321,11 @@ class MMM:
         transform_df = df.copy()
         logger.info("Pre-process data.")
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
-        transform_df[self.control_feat_cols] = np.log1p(transform_df[self.control_feat_cols])
+        transform_df[self.control_feat_cols] = np.log1p(
+            transform_df[self.control_feat_cols]
+        )
         self._derive_saturation(transform_df)
-        sat_array = self.saturation_df['saturation'].values
+        sat_array = self.saturation_df["saturation"].values
 
         # transformed data-frame would lose first n(=adstock size) observations due to adstock process
         adstock_matrix = self.get_adstock_matrix()
@@ -319,30 +340,38 @@ class MMM:
         transform_df = new_transform_df.copy()
 
         # dim: time x num of regressors
-        transform_df[self.spend_cols] = transform_df[self.spend_cols].values / sat_array.reshape(1, -1)
+        transform_df[self.spend_cols] = transform_df[
+            self.spend_cols
+        ].values / sat_array.reshape(1, -1)
         transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols])
 
         if len(self.fs_orders) > 0:
             for s, fs_order in zip(self.seasonality, self.fs_orders):
                 transform_df, _ = make_fourier_series_df(
-                    transform_df,
-                    prefix="s{}_".format(s),
-                    period=s,
-                    order=fs_order
+                    transform_df, prefix="s{}_".format(s), period=s, order=fs_order
                 )
 
         logger.info("Build a default regression scheme")
         reg_scheme = pd.DataFrame()
         # regressors should be in this order
         # spend_cols + fs_cols + event_cols + control_feat_cols
-        reg_scheme['regressor'] = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
-        reg_scheme['regressor_sign'] = \
-            ["+"] * len(self.spend_cols) + ["="] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
-        reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
-        reg_scheme['regressor_sigma_prior'] = \
-            [self.default_spend_sigma_prior] * len(self.spend_cols) + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
-        reg_scheme = reg_scheme.set_index('regressor')
-    
+        reg_scheme["regressor"] = (
+            self.spend_cols
+            + self.fs_cols_flatten
+            + self.event_cols
+            + self.control_feat_cols
+        )
+        reg_scheme["regressor_sign"] = ["+"] * len(self.spend_cols) + ["="] * len(
+            self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+        )
+        reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
+        reg_scheme["regressor_sigma_prior"] = [self.default_spend_sigma_prior] * len(
+            self.spend_cols
+        ) + [10.0] * len(
+            self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+        )
+        reg_scheme = reg_scheme.set_index("regressor")
+
         # replace original one with extra_priors if given
         if extra_priors is not None:
             self.extra_priors = deepcopy(extra_priors)
@@ -350,19 +379,21 @@ class MMM:
         # if extra_priors already set and doesn't get any from input, use the one attached in the object
         if self.extra_priors is not None:
             for idx, row in self.extra_priors.iterrows():
-                test_channel = row['test_channel']
+                test_channel = row["test_channel"]
                 logger.info("Updating {} prior".format(test_channel))
-                reg_scheme.loc[test_channel, 'regressor_coef_prior'] = row['coef_prior']
-                reg_scheme.loc[test_channel, 'regressor_sigma_prior'] = row['sigma_prior']
+                reg_scheme.loc[test_channel, "regressor_coef_prior"] = row["coef_prior"]
+                reg_scheme.loc[test_channel, "regressor_sigma_prior"] = row[
+                    "sigma_prior"
+                ]
 
         self._model = DLT(
             response_col=self.kpi_col,
             regressor_col=reg_scheme.index.tolist(),
-            regressor_sign=reg_scheme['regressor_sign'].tolist(),
-            regressor_beta_prior=reg_scheme['regressor_coef_prior'].tolist(),
-            regressor_sigma_prior=reg_scheme['regressor_sigma_prior'].tolist(),
+            regressor_sign=reg_scheme["regressor_sign"].tolist(),
+            regressor_beta_prior=reg_scheme["regressor_coef_prior"].tolist(),
+            regressor_sigma_prior=reg_scheme["regressor_sigma_prior"].tolist(),
             date_col=self.date_col,
-            estimator='stan-mcmc',
+            estimator="stan-mcmc",
             num_warmup=8000,
             num_sample=4000,
             # use small sigma for global trend as this is a long-term daily model
@@ -370,7 +401,7 @@ class MMM:
             **self.best_params,
             **kwargs,
         )
-        self._model.fit(transform_df, point_method='median')
+        self._model.fit(transform_df, point_method="median")
 
         # run it again to use sigma constraint and weight by original coefficient size
         if self.total_market_sigma_prior is not None:
@@ -383,34 +414,46 @@ class MMM:
             reg_scheme = pd.DataFrame()
             # regressors should be in this order
             # spend_cols + fs_cols + event_cols + control_feat_cols
-            reg_scheme['regressor'] = self.spend_cols + self.fs_cols_flatten + self.event_cols + self.control_feat_cols
-            reg_scheme['regressor_sign'] = \
-                ["+"] * len(self.spend_cols) + ["="] * len(
-                    self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
-            reg_scheme['regressor_coef_prior'] = [0.0] * reg_scheme.shape[0]
-            reg_scheme = reg_scheme.set_index('regressor')
+            reg_scheme["regressor"] = (
+                self.spend_cols
+                + self.fs_cols_flatten
+                + self.event_cols
+                + self.control_feat_cols
+            )
+            reg_scheme["regressor_sign"] = ["+"] * len(self.spend_cols) + ["="] * len(
+                self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+            )
+            reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
+            reg_scheme = reg_scheme.set_index("regressor")
             n_spend_cols = len(self.spend_cols)
             # make total market sigma weighted by original coef size
-            reg_coefs = reg_coef_dfs.loc[self.spend_cols, 'coefficient'].values
-            spend_sigma_prior = list(self.total_market_sigma_prior * reg_coefs / np.sum(reg_coefs))
-            reg_scheme['regressor_sigma_prior'] = \
-                spend_sigma_prior + [10.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
+            reg_coefs = reg_coef_dfs.loc[self.spend_cols, "coefficient"].values
+            spend_sigma_prior = list(
+                self.total_market_sigma_prior * reg_coefs / np.sum(reg_coefs)
+            )
+            reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [10.0] * len(
+                self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+            )
 
             if self.extra_priors is not None:
                 for idx, row in self.extra_priors.iterrows():
-                    test_channel = row['test_channel']
+                    test_channel = row["test_channel"]
                     logger.info("Updating {} prior".format(test_channel))
-                    reg_scheme.loc[test_channel, 'regressor_coef_prior'] = row['coef_prior']
-                    reg_scheme.loc[test_channel, 'regressor_sigma_prior'] = row['sigma_prior']
+                    reg_scheme.loc[test_channel, "regressor_coef_prior"] = row[
+                        "coef_prior"
+                    ]
+                    reg_scheme.loc[test_channel, "regressor_sigma_prior"] = row[
+                        "sigma_prior"
+                    ]
 
             self._model = DLT(
                 response_col=self.kpi_col,
                 regressor_col=reg_scheme.index.tolist(),
-                regressor_sign=reg_scheme['regressor_sign'].tolist(),
-                regressor_beta_prior=reg_scheme['regressor_coef_prior'].tolist(),
-                regressor_sigma_prior=reg_scheme['regressor_sigma_prior'].tolist(),
+                regressor_sign=reg_scheme["regressor_sign"].tolist(),
+                regressor_beta_prior=reg_scheme["regressor_coef_prior"].tolist(),
+                regressor_sigma_prior=reg_scheme["regressor_sigma_prior"].tolist(),
                 date_col=self.date_col,
-                estimator='stan-mcmc',
+                estimator="stan-mcmc",
                 num_warmup=8000,
                 num_sample=4000,
                 # use small sigma for global trend as this is a long-term daily model
@@ -419,27 +462,21 @@ class MMM:
                 **kwargs,
             )
             # self._model.fit(transform_df)
-            self._model.fit(transform_df, point_method='median')
+            self._model.fit(transform_df, point_method="median")
 
         self.regression_scheme = reg_scheme
 
     def predict(
-            self,
-            df: pd.DataFrame,
-            decompose: bool = False,
-            **kwargs
+        self, df: pd.DataFrame, decompose: bool = False, **kwargs
     ) -> pd.DataFrame:
         # TODO: can make transformation a module
         transform_df = df.copy()
-        sat_array = self.saturation_df['saturation'].values
+        sat_array = self.saturation_df["saturation"].values
 
         if len(self.fs_orders) > 0:
             for s, fs_order in zip(self.seasonality, self.fs_orders):
                 transform_df, _ = make_fourier_series_df(
-                    transform_df,
-                    prefix="s{}_".format(s),
-                    period=s,
-                    order=fs_order
+                    transform_df, prefix="s{}_".format(s), period=s, order=fs_order
                 )
 
         # transformed data-frame would lose the first n(=adstock) observations due to the adstock process
@@ -454,42 +491,54 @@ class MMM:
         transform_df = new_transform_df
 
         # (n_steps,  n_regressors)
-        transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols].values / sat_array)
-        transform_df[self.control_feat_cols] = np.log1p(transform_df[self.control_feat_cols].values)
+        transform_df[self.spend_cols] = np.log1p(
+            transform_df[self.spend_cols].values / sat_array
+        )
+        transform_df[self.control_feat_cols] = np.log1p(
+            transform_df[self.control_feat_cols].values
+        )
 
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
         # _5 and _95 probably won't exist with median prediction for current version
-        pred_tr_col = [x for x in ['prediction_5', 'prediction', 'prediction_95'] if x in pred.columns]
+        pred_tr_col = [
+            x
+            for x in ["prediction_5", "prediction", "prediction_95"]
+            if x in pred.columns
+        ]
         pred[pred_tr_col] = pred[pred_tr_col].apply(np.exp)
 
         pred_base = df[[self.date_col]]
         # preserve the shape of original input; first n(=adstock) will have null values
-        pred = pd.merge(pred_base, pred, on=[self.date_col], how='left')
+        pred = pd.merge(pred_base, pred, on=[self.date_col], how="left")
 
         # unlike orbit, decompose the regression and seasonal regression here
         if decompose:
             # pred = pred.drop(columns=['regression']).rename(columns={'seasonality': 'weekly seasonality'})
-            pred = pred.drop(columns=['regression'])
+            pred = pred.drop(columns=["regression"])
             # (n_regressors, )
             coef_paid = self.get_coef_vector(self.spend_cols)
             # (n_steps, n_regressors)
             x_paid = transform_df[self.spend_cols].values
-            reg_paid = np.concatenate([
-                np.full(max_adstock, fill_value=np.nan),
-                np.sum(coef_paid * x_paid, -1),
-            ])
-            pred['paid'] = reg_paid
+            reg_paid = np.concatenate(
+                [
+                    np.full(max_adstock, fill_value=np.nan),
+                    np.sum(coef_paid * x_paid, -1),
+                ]
+            )
+            pred["paid"] = reg_paid
             if self.event_cols:
                 # (n_regressors, )
                 coef_event = self.get_coef_vector(self.event_cols)
                 # (n_steps, n_regressors)
                 x_event = transform_df[self.event_cols].values
                 # workaround with period that was unknown due to adstock
-                reg_event = np.concatenate([
-                    np.full(max_adstock, fill_value=np.nan),
-                    np.sum(coef_event * x_event, -1)
-                ])
-                pred['events'] = reg_event
+                reg_event = np.concatenate(
+                    [
+                        np.full(max_adstock, fill_value=np.nan),
+                        np.sum(coef_event * x_event, -1),
+                    ]
+                )
+                pred["events"] = reg_event
             if len(self.fs_cols) > 0:
                 for s, fs_col in zip(self.seasonality, self.fs_cols):
                     # (n_regressors, )
@@ -497,29 +546,30 @@ class MMM:
                     # (n_steps, n_regressors)
                     x_fs = transform_df[fs_col].values
                     # workaround with period that was unknown due to adstock
-                    reg_fs = np.concatenate([
-                        np.full(max_adstock, fill_value=np.nan),
-                        np.sum(coef_fs * x_fs, -1)
-                    ])
-                    pred['s-{} seasonality'.format(s)] = reg_fs
+                    reg_fs = np.concatenate(
+                        [
+                            np.full(max_adstock, fill_value=np.nan),
+                            np.sum(coef_fs * x_fs, -1),
+                        ]
+                    )
+                    pred["s-{} seasonality".format(s)] = reg_fs
             if len(self.control_feat_cols) > 0:
                 # (n_regressors, )
                 coef_control = self.get_coef_vector(self.control_feat_cols)
                 # (n_steps, n_regressors)
                 x_control = np.log1p(transform_df[self.control_feat_cols].values)
                 # workaround with period that was unknown due to adstock
-                reg_control = np.concatenate([
-                    np.full(max_adstock, fill_value=np.nan),
-                    np.sum(coef_control * x_control, -1)
-                ])
-                pred['control_features'] = reg_control
+                reg_control = np.concatenate(
+                    [
+                        np.full(max_adstock, fill_value=np.nan),
+                        np.sum(coef_control * x_control, -1),
+                    ]
+                )
+                pred["control_features"] = reg_control
 
         return pred
 
-    def get_regressors(
-            self,
-            exclude_fs_cols: bool = True
-    ) -> List[str]:
+    def get_regressors(self, exclude_fs_cols: bool = True) -> List[str]:
         """Return all regressors used in the model including fourier-series terms (optional), spend etc.
 
         Args:
@@ -543,8 +593,8 @@ class MMM:
 
     # add arg with spend_col
     def get_adstock_matrix(
-            self,
-            spend_cols: Optional[List[str]] = None,
+        self,
+        spend_cols: Optional[List[str]] = None,
     ) -> np.array:
         if spend_cols is None:
             spend_cols = self.get_spend_cols()
@@ -565,38 +615,44 @@ class MMM:
         # by default, orbit uses lower=0.05, upper=0.95
         regression_coef_dfs = self._model.get_regression_coefs().rename(
             columns={
-                'regressor_sign': 'sign',
-                'coefficient': 'coef_p50',
-                'coefficient_lower': 'coef_p05',
-                'coefficient_upper': 'coef_p95',
+                "regressor_sign": "sign",
+                "coefficient": "coef_p50",
+                "coefficient_lower": "coef_p05",
+                "coefficient_upper": "coef_p95",
             }
         )
-        regression_scheme = self.regression_scheme.copy().rename(
-            columns={
-                'regressor_coef_prior': 'loc_prior',
-                'regressor_sigma_prior': 'scale_prior',
-            }
-        ).drop(columns=['regressor_sign'])
-        out = pd.merge(left=regression_coef_dfs, right=regression_scheme, on=['regressor'])
+        regression_scheme = (
+            self.regression_scheme.copy()
+            .rename(
+                columns={
+                    "regressor_coef_prior": "loc_prior",
+                    "regressor_sigma_prior": "scale_prior",
+                }
+            )
+            .drop(columns=["regressor_sign"])
+        )
+        out = pd.merge(
+            left=regression_coef_dfs, right=regression_scheme, on=["regressor"]
+        )
         return out
 
     def get_coef_vector(
-            self,
-            regressors: Optional[List[str]] = None,
+        self,
+        regressors: Optional[List[str]] = None,
     ) -> np.array:
 
         coef_df = self._model.get_regression_coefs()
-        coef_df = coef_df.set_index('regressor')
+        coef_df = coef_df.set_index("regressor")
         if regressors is not None:
-            coef_array = coef_df.loc[regressors, 'coefficient'].values
+            coef_array = coef_df.loc[regressors, "coefficient"].values
         else:
-            coef_array = coef_df.loc[:, 'coefficient'].values
+            coef_array = coef_df.loc[:, "coefficient"].values
         return coef_array
 
     def get_coef_matrix(
-            self,
-            date_array: np.array,
-            regressors: Optional[List[str]] = None,
+        self,
+        date_array: np.array,
+        regressors: Optional[List[str]] = None,
     ) -> np.array:
         """Right now we ignore date_array since this is static coef. model
         Args:
@@ -609,11 +665,11 @@ class MMM:
         """
 
         coef_df = self._model.get_regression_coefs()
-        coef_df = coef_df.set_index('regressor')
+        coef_df = coef_df.set_index("regressor")
         if regressors is not None:
-            coef_matrix = coef_df.loc[regressors, 'coefficient'].values
+            coef_matrix = coef_df.loc[regressors, "coefficient"].values
         else:
-            coef_matrix = coef_df.loc[:, 'coefficient'].values
+            coef_matrix = coef_df.loc[:, "coefficient"].values
         coef_matrix = np.tile(coef_matrix, (len(date_array), 1))
         return coef_matrix
 
