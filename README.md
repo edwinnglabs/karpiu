@@ -1,3 +1,5 @@
+[![Formatting](https://github.com/edwinnglabs/karpiu/actions/workflows/formatting.yaml/badge.svg)](https://github.com/edwinnglabs/karpiu/actions/workflows/formatting.yaml)
+
 # Karpiu
 
 **Karpiu** is a package designed for Marketing Mix Modeling (MMM) by calling [Orbit](https://github.com/uber/orbit) from the backend. Karpiu is still in its beta version.  Please use it at your own risk.
