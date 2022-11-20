@@ -1,4 +1,7 @@
 install-dev:
+	pip install -e .
+
+install-poetry:
 	pip install poetry
 	poetry install
 
