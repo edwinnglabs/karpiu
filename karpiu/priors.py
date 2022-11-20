@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.optimize import fsolve
-from .explainer import Attributor
+from .explainability import Attributor
 
 import logging
 

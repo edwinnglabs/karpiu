@@ -515,7 +515,7 @@ def make_attribution_numpy(
 #     if df is None:
 #         df = model.raw_df.copy()
 #
-#     # organice plus all regressors
+#     # organic plus all regressors
 #     pred_array = np.empty((df.shape[0], len(regressors)))
 #     delta_array = np.empty((df.shape[0], len(regressors) + 1))
 #     full_pred = model.predict(df)['prediction'].values.reshape(-1, 1)
