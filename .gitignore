@@ -132,6 +132,9 @@ dmypy.json
 .idea/
 .DS_Store
 
+# VSCode
+*.vscode/
+
 # data
 *.csv
 *.jpg
