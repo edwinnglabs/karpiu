@@ -140,3 +140,6 @@ dmypy.json
 
 # site
 site/
+
+# poetry
+poetry.lock
