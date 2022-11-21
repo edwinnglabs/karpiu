@@ -170,10 +170,10 @@ def make_regression(
 
 
 def make_adstock_matrix(
-     n_steps: int,
-     peak_step: np.array,
-     left_growth: np.array,
-     right_growth: np.array,
+    n_steps: int,
+    peak_step: np.array,
+    left_growth: np.array,
+    right_growth: np.array,
 ) -> np.array:
     """Given the peak, left and right growth, generate adstock matrix"""
     res = list()
@@ -193,7 +193,7 @@ def make_mmm_daily_data(
     scalability: Union[List[float], np.array],
     n_steps: int = 365 * 3,
     seed: int = 2022,
-    start_date: str ="2019-01-01",
+    start_date: str = "2019-01-01",
     adstock_args: Optional[Dict[str, np.array]] = None,
 ) -> pd.DataFrame:
 
@@ -207,21 +207,29 @@ def make_mmm_daily_data(
     # to fix start date, add more data length if we have adstock
     n_steps += n_max_adstock
 
-    levs = make_trend(n_steps=n_steps, rw_loc=0.001, rw_scale=0.01, seed=seed) 
-    yearly_seas = make_seasonality(order=3, scale=0.1, n_steps=n_steps, seasonality=365.25, seed=seed)
-    weekly_seas = make_seasonality(order=2, scale=0.02, n_steps=n_steps, seasonality=7, seed=seed)
-    x = make_features(n_obs=n_steps, loc=features_loc, scale=features_scale, sparsity=0.25, seed=seed)
+    levs = make_trend(n_steps=n_steps, rw_loc=0.001, rw_scale=0.01, seed=seed)
+    yearly_seas = make_seasonality(
+        order=3, scale=0.1, n_steps=n_steps, seasonality=365.25, seed=seed
+    )
+    weekly_seas = make_seasonality(
+        order=2, scale=0.02, n_steps=n_steps, seasonality=7, seed=seed
+    )
+    x = make_features(
+        n_obs=n_steps, loc=features_loc, scale=features_scale, sparsity=0.25, seed=seed
+    )
     # strictly positive features
     x = np.ceil(np.clip(x, a_min=0, a_max=np.inf))
     tran_x = deepcopy(x)
-    
+
     if adstock_args is not None:
         adstock_steps = adstock_args["n_steps"]
         n_max_adstock = adstock_steps - 1
         adstock_matrix = make_adstock_matrix(**adstock_args)
         tran_x = adstock_process(tran_x, adstock_matrix=adstock_matrix)
         columns = ["d_{}".format(x) for x in range(adstock_steps)]
-        adstock_df = pd.DataFrame(adstock_matrix, columns=columns, index=channels).index.rename("regressor", inplace=True)
+        adstock_df = pd.DataFrame(
+            adstock_matrix, columns=columns, index=channels
+        ).index.rename("regressor", inplace=True)
 
     # transformation
     tran_x = np.log(1 + tran_x / np.median(x))
@@ -229,8 +237,15 @@ def make_mmm_daily_data(
     # bias is also chosen to make response in a reasonable range ~ 100 to 5k base range
     # noise is generated in this regression module
     reg_comp = make_regression(tran_x, coefs=coefs, bias=6.4, noise_scale=0.25)
-    y = levs[n_max_adstock:] + weekly_seas[n_max_adstock:] + yearly_seas[n_max_adstock:] + reg_comp
-    dt_array =  pd.to_datetime(start_date) + pd.to_timedelta(np.arange(n_steps), unit='D')
+    y = (
+        levs[n_max_adstock:]
+        + weekly_seas[n_max_adstock:]
+        + yearly_seas[n_max_adstock:]
+        + reg_comp
+    )
+    dt_array = pd.to_datetime(start_date) + pd.to_timedelta(
+        np.arange(n_steps), unit="D"
+    )
     dt_array = dt_array[n_max_adstock:]
 
     df = pd.DataFrame(x[n_max_adstock:], columns=channels)
@@ -247,7 +262,4 @@ def make_mmm_daily_data(
         }
     )
 
-
-
     return df, scalability_df, adstock_df
-

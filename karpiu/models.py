@@ -141,8 +141,8 @@ class MMM:
         self.tuning_df = None
 
     def filter_features(
-        self,  
-        df: pd.DataFrame, 
+        self,
+        df: pd.DataFrame,
         num_warmup: int = 400,
         num_sample: int = 100,
         chains: int = 1,
@@ -321,9 +321,9 @@ class MMM:
         self.saturation_df = self.saturation_df.set_index("regressor")
 
     def fit(
-        self, 
-        df: pd.DataFrame, 
-        extra_priors: Optional[pd.DataFrame] = None, 
+        self,
+        df: pd.DataFrame,
+        extra_priors: Optional[pd.DataFrame] = None,
         num_warmup: int = 400,
         num_sample: int = 100,
         chains: int = 1,
