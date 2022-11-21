@@ -13,7 +13,7 @@ scipy>=1.8.1
 pystan==2.19.1.1
 # install orbit from dev
 # orbit-ml>=1.1.2
-# orbit-ml @ git+https://github.com/uber/orbit.git@dev
+orbit-ml @ git+https://github.com/uber/orbit.git@dev
 
 # torch
 # tableone

@@ -140,7 +140,14 @@ class MMM:
         self.best_params = {}
         self.tuning_df = None
 
-    def filter_features(self, df: pd.DataFrame, **kwargs):
+    def filter_features(
+        self,
+        df: pd.DataFrame,
+        num_warmup: int = 400,
+        num_sample: int = 100,
+        chains: int = 1,
+        **kwargs
+    ):
         logger.info("Screen events by Pr(coef>=0) >= 0.9 or Pr(coef>=0) <= 0.1.")
         transform_df = df.copy()
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
@@ -168,8 +175,9 @@ class MMM:
             # a safe setting for fast regression; will estimate this in final model
             level_sm_input=0.001,
             # slope_sm_input=0.01,
-            num_warmup=4000,
-            num_sample=1000,
+            num_warmup=num_warmup,
+            num_sample=num_sample,
+            chains=chains,
             # use small sigma for global trend as this is a long-term daily model
             global_trend_sigma_prior=0.001,
             **self.best_params,
@@ -313,7 +321,13 @@ class MMM:
         self.saturation_df = self.saturation_df.set_index("regressor")
 
     def fit(
-        self, df: pd.DataFrame, extra_priors: Optional[pd.DataFrame] = None, **kwargs
+        self,
+        df: pd.DataFrame,
+        extra_priors: Optional[pd.DataFrame] = None,
+        num_warmup: int = 400,
+        num_sample: int = 100,
+        chains: int = 1,
+        **kwargs
     ) -> None:
 
         logger.info("Fit final model.")
@@ -394,8 +408,9 @@ class MMM:
             regressor_sigma_prior=reg_scheme["regressor_sigma_prior"].tolist(),
             date_col=self.date_col,
             estimator="stan-mcmc",
-            num_warmup=8000,
-            num_sample=4000,
+            num_warmup=num_warmup,
+            num_sample=num_sample,
+            chains=chains,
             # use small sigma for global trend as this is a long-term daily model
             global_trend_sigma_prior=0.001,
             **self.best_params,
