@@ -1,5 +1,9 @@
 import numpy as np
-from typing import Optional
+import pandas as pd
+from copy import deepcopy
+from typing import Optional, List, Union, Dict
+
+from .utils import adstock_process
 
 
 def make_trend(
@@ -56,6 +60,7 @@ def make_seasonality(
       directly derived to preserve the property of the sum of seasonality equals 1.
       2. In case of method = 'fourier', see https://otexts.com/fpp2/complexseasonality.html
     """
+
     if seed is not None:
         np.random.seed(seed)
     if seasonality > 1:
@@ -162,3 +167,87 @@ def make_regression(
         y = np.matmul(x, coefs) + noise
 
     return y
+
+
+def make_adstock_matrix(
+     n_steps: int,
+     peak_step: np.array,
+     left_growth: np.array,
+     right_growth: np.array,
+) -> np.array:
+    """Given the peak, left and right growth, generate adstock matrix"""
+    res = list()
+    for pks, lg, rg in zip(peak_step, left_growth, right_growth):
+        y1 = np.power(1 + lg, np.arange(0, pks))
+        y2 = np.power(1 + rg, np.arange(0, n_steps - pks)) * y1[-1]
+        y = np.concatenate([y1, y2])
+        res.append(y / np.sum(y))
+    return np.vstack(res)
+
+
+def make_mmm_daily_data(
+    coefs: Union[List[float], np.array],
+    channels: List[str],
+    features_loc: Union[List[float], np.array],
+    features_scale: Union[List[float], np.array],
+    scalability: Union[List[float], np.array],
+    n_steps: int = 365 * 3,
+    seed: int = 2022,
+    start_date: str ="2019-01-01",
+    adstock_args: Optional[Dict[str, np.array]] = None,
+) -> pd.DataFrame:
+
+    # these loc and scale parameters are chosen to mimic realistic daily data
+    n_max_adstock = 0
+    adstock_df = None
+    if adstock_args is not None:
+        adstock_steps = adstock_args["n_steps"]
+        n_max_adstock = adstock_steps - 1
+
+    # to fix start date, add more data length if we have adstock
+    n_steps += n_max_adstock
+
+    levs = make_trend(n_steps=n_steps, rw_loc=0.001, rw_scale=0.01, seed=seed) 
+    yearly_seas = make_seasonality(order=3, scale=0.1, n_steps=n_steps, seasonality=365.25, seed=seed)
+    weekly_seas = make_seasonality(order=2, scale=0.02, n_steps=n_steps, seasonality=7, seed=seed)
+    x = make_features(n_obs=n_steps, loc=features_loc, scale=features_scale, sparsity=0.25, seed=seed)
+    # strictly positive features
+    x = np.ceil(np.clip(x, a_min=0, a_max=np.inf))
+    tran_x = deepcopy(x)
+    
+    if adstock_args is not None:
+        adstock_steps = adstock_args["n_steps"]
+        n_max_adstock = adstock_steps - 1
+        adstock_matrix = make_adstock_matrix(**adstock_args)
+        tran_x = adstock_process(tran_x, adstock_matrix=adstock_matrix)
+        columns = ["d_{}".format(x) for x in range(adstock_steps)]
+        adstock_df = pd.DataFrame(adstock_matrix, columns=columns, index=channels).index.rename("regressor", inplace=True)
+
+    # transformation
+    tran_x = np.log(1 + tran_x / np.median(x))
+
+    # bias is also chosen to make response in a reasonable range ~ 100 to 5k base range
+    # noise is generated in this regression module
+    reg_comp = make_regression(tran_x, coefs=coefs, bias=6.4, noise_scale=0.25)
+    y = levs[n_max_adstock:] + weekly_seas[n_max_adstock:] + yearly_seas[n_max_adstock:] + reg_comp
+    dt_array =  pd.to_datetime(start_date) + pd.to_timedelta(np.arange(n_steps), unit='D')
+    dt_array = dt_array[n_max_adstock:]
+
+    df = pd.DataFrame(x[n_max_adstock:], columns=channels)
+    # turns to elasticity model with log-log transformation
+    df["sales"] = np.ceil(np.exp(y))
+    df["date"] = dt_array
+    # re-arrange columns
+    df = df[["date", "sales"] + channels]
+
+    scalability_df = pd.DataFrame(
+        data={
+            "regressor": channels,
+            "scalability": scalability,
+        }
+    )
+
+
+
+    return df, scalability_df, adstock_df
+
