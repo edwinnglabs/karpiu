@@ -21,10 +21,6 @@ jobs:
         run: python -c "import sys; print(sys.version)"
       - name: Install dependencies
         run: |
-            pip install -U pip
-            pip install -U setuptools
-            pip install -r requirements.txt
-            pip install -r requirements-test.txt
-            python setup.py develop
+            make install-dev
       - name: Test with pytest
         run: pytest -vs tests/ --cov karpiu/
