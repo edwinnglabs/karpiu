@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger("karpiu-planning")
 
 from ..models import MMM
-from ..explainability import adstock_process
+from ..utils import adstock_process
 
 
 class CostCurves:

@@ -88,14 +88,6 @@ class ResponseMaximizer:
         )
         self.optim_coef_matrix = optim_coef_matrix[self.n_max_adstock :]
 
-        # derive budget constraints based on total sum of init values
-        total_budget_constraint = optim.LinearConstraint(
-            np.ones(n_budget_steps * self.n_optim_channels),
-            np.zeros(1),
-            np.ones(1) * self.total_budget / self.spend_scaler,
-        )
-        self.constraints = [total_budget_constraint]
-
         # derive budget bounds for each step and each channel
         self.budget_bounds = optim.Bounds(
             lb=np.zeros(n_budget_steps * self.n_optim_channels),
@@ -151,6 +143,37 @@ class ResponseMaximizer:
         # only background spend involved; turn off all spend during budget decision period
         bkg_spend_matrix[self.n_max_adstock : -self.n_max_adstock, ...] = 0.0
         self.bkg_spend_matrix = bkg_spend_matrix
+
+    def set_constraints(self, constraints: optim.LinearConstraint):
+        self.constraints = constraints
+    
+    def add_constraints(self, constraints: optim.LinearConstraint):
+        self.constraints += constraints
+
+    def add_total_budget_constraints(self):
+        # derive budget constraints based on total sum of init values
+        # scipy.optimize.LinearConstraint notation: lb <= A.dot(x) <= ub
+        total_budget_constraint = optim.LinearConstraint(
+            A=np.ones(self.n_budget_steps  * self.n_optim_channels),
+            lb=np.zeros(1),
+            ub=np.ones(1) * self.total_budget / self.spend_scaler,
+        )
+        self.add_constraints([total_budget_constraint])
+
+    # TODO: 
+    # add more issues e.g.
+    # 1. add individual budget constraints
+    # 2. add tutorials and demo
+    # 3. add attribution tutorials
+    # 4. add better auto doc workflow
+    # 5. add unit test of attribution
+    # 6. add unit test of optimization
+    # def add_individual_channel_constraints(self, delta=0.1):
+    #     ind_constraints = optim.LinearConstraint(
+    #         A=np.ones(self.n_budget_steps  * self.n_optim_channels),
+    #         lb=np.zeros(1),
+    #         ub=np.ones(1) * self.total_budget / self.spend_scaler,
+    #     )
 
     def objective_func(self, spend):
         spend_matrix = spend.reshape(-1, self.n_optim_channels) * self.spend_scaler
