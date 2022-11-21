@@ -1,3 +1,5 @@
+[![build](https://github.com/edwinnglabs/karpiu/actions/workflows/build.yaml/badge.svg?event=push)](https://github.com/edwinnglabs/karpiu/actions/workflows/build.yaml)
+
 [![format](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml/badge.svg)](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml)
 
 # Karpiu
