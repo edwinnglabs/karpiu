@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
-from typing import Optional
+from typing import Optional, List
 import logging
 from ..models import MMM
 import scipy.optimize as optim
@@ -52,7 +52,7 @@ class ResponseMaximizer:
             - set(self.optim_channel)
             - set(self.event_regressor)
         )
-
+        self.constraints = list()
         # TODO: some log info here
 
         # derive masks and dt_array
@@ -87,6 +87,11 @@ class ResponseMaximizer:
             date_array=calc_dt_array, regressors=optim_channel
         )
         self.optim_coef_matrix = optim_coef_matrix[self.n_max_adstock :]
+
+        total_budget_constraint = self.generate_total_budget_constraint()
+        ind_budget_constraints = self.generate_individual_channel_constraints(delta=0.1)
+        self.add_constraints([total_budget_constraint])
+        self.add_constraints(ind_budget_constraints)
 
         # derive budget bounds for each step and each channel
         self.budget_bounds = optim.Bounds(
@@ -144,21 +149,21 @@ class ResponseMaximizer:
         bkg_spend_matrix[self.n_max_adstock : -self.n_max_adstock, ...] = 0.0
         self.bkg_spend_matrix = bkg_spend_matrix
 
-    def set_constraints(self, constraints: optim.LinearConstraint):
+    def set_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints = constraints
     
-    def add_constraints(self, constraints: optim.LinearConstraint):
+    def add_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints += constraints
 
-    def add_total_budget_constraints(self):
+    def generate_total_budget_constraint(self) -> optim.LinearConstraint:
         # derive budget constraints based on total sum of init values
         # scipy.optimize.LinearConstraint notation: lb <= A.dot(x) <= ub
         total_budget_constraint = optim.LinearConstraint(
-            A=np.ones(self.n_budget_steps  * self.n_optim_channels),
+            A=np.ones(self.n_budget_steps * self.n_optim_channels),
             lb=np.zeros(1),
             ub=np.ones(1) * self.total_budget / self.spend_scaler,
         )
-        self.add_constraints([total_budget_constraint])
+        return total_budget_constraint
 
     # TODO: 
     # add more issues e.g.
@@ -168,12 +173,22 @@ class ResponseMaximizer:
     # 4. add better auto doc workflow
     # 5. add unit test of attribution
     # 6. add unit test of optimization
-    # def add_individual_channel_constraints(self, delta=0.1):
-    #     ind_constraints = optim.LinearConstraint(
-    #         A=np.ones(self.n_budget_steps  * self.n_optim_channels),
-    #         lb=np.zeros(1),
-    #         ub=np.ones(1) * self.total_budget / self.spend_scaler,
-    #     )
+
+    def generate_individual_channel_constraints(self, delta=0.1):
+        constraints = list()
+        init_spend_channel_total_arr = np.sum(self.init_spend_matrix, 0)
+        for idx in range(self.n_optim_channels):
+            lb = (1 - delta) * init_spend_channel_total_arr[idx]
+            ub = (1 + delta) * init_spend_channel_total_arr[idx]
+            A = np.zeros((self.n_budget_steps, self.n_optim_channels))
+            A[:, idx] = 1.0
+            ind_constraint = optim.LinearConstraint(
+                A=A,
+                lb=lb,
+                ub=ub,
+            )
+            constraints.append(ind_constraint)
+        return constraints
 
     def objective_func(self, spend):
         spend_matrix = spend.reshape(-1, self.n_optim_channels) * self.spend_scaler
