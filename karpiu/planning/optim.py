@@ -183,7 +183,7 @@ class ResponseMaximizer:
             A = np.zeros((self.n_budget_steps, self.n_optim_channels))
             A[:, idx] = 1.0
             ind_constraint = optim.LinearConstraint(
-                A=A,
+                A=A.flatten(),
                 lb=lb,
                 ub=ub,
             )
@@ -289,6 +289,7 @@ class RevenueMaximizer:
         self.response_scaler = response_scaler
         self.spend_scaler = spend_scaler
         self.ltv_arr = ltv_arr
+        self.constraints = list()
 
         # derive basic attributes
         self.n_max_adstock = model.get_max_adstock()
@@ -354,13 +355,10 @@ class RevenueMaximizer:
             transformed_bkg_matrix / self.optim_sat_array
         )
 
-        # derive budget constraints based on total sum of init values
-        total_budget_constraint = optim.LinearConstraint(
-            np.ones(n_budget_steps * self.n_optim_channels),
-            np.zeros(1),
-            np.ones(1) * self.total_budget / self.spend_scaler,
-        )
-        self.constraints = [total_budget_constraint]
+        total_budget_constraint = self.generate_total_budget_constraint()
+        ind_budget_constraints = self.generate_individual_channel_constraints(delta=0.1)
+        self.add_constraints([total_budget_constraint])
+        self.add_constraints(ind_budget_constraints)
 
         # derive budget bounds for each step and each channel
         self.budget_bounds = optim.Bounds(
@@ -369,6 +367,38 @@ class RevenueMaximizer:
             * self.total_budget
             / self.spend_scaler,
         )
+
+    def set_constraints(self, constraints: List[optim.LinearConstraint]):
+        self.constraints = constraints
+    
+    def add_constraints(self, constraints: List[optim.LinearConstraint]):
+        self.constraints += constraints
+
+    def generate_total_budget_constraint(self) -> optim.LinearConstraint:
+        # derive budget constraints based on total sum of init values
+        # scipy.optimize.LinearConstraint notation: lb <= A.dot(x) <= ub
+        total_budget_constraint = optim.LinearConstraint(
+            A=np.ones(self.n_budget_steps * self.n_optim_channels),
+            lb=np.zeros(1),
+            ub=np.ones(1) * self.total_budget / self.spend_scaler,
+        )
+        return total_budget_constraint
+
+    def generate_individual_channel_constraints(self, delta=0.1):
+        constraints = list()
+        init_spend_channel_total_arr = np.sum(self.init_spend_matrix, 0)
+        for idx in range(self.n_optim_channels):
+            lb = (1 - delta) * init_spend_channel_total_arr[idx]
+            ub = (1 + delta) * init_spend_channel_total_arr[idx]
+            A = np.zeros((self.n_budget_steps, self.n_optim_channels))
+            A[:, idx] = 1.0
+            ind_constraint = optim.LinearConstraint(
+                A=A.flatten(),
+                lb=lb / self.spend_scaler,
+                ub=ub / self.spend_scaler,
+            )
+            constraints.append(ind_constraint)
+        return constraints
 
     def objective_func(self, spend):
         spend_matrix = spend.reshape(-1, self.n_optim_channels) * self.spend_scaler
