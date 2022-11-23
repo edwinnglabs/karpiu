@@ -5,13 +5,13 @@
 
 **Karpiu** is a package designed for Marketing Mix Modeling (MMM) by calling [Orbit](https://github.com/uber/orbit) from the backend. Karpiu is still in its beta version.  Please use it at your own risk.
 
-# Documentation
+# Tutorials & Documentation
 
-For usage in details, users can refer to this [documentation](https://edwinng.com/karpiu/).
+For usage, users can refer to this [documentation](https://edwinng.com/karpiu/).
 
 # Installation
 
-To access the development version, please follow the below instructions or simply use `make install-dev` after cloning the repository.  Due to the dependencies of `pystan==2.19.1.1`, it is recommended to fufill condition `python<=3.8` to have the best experience.
+To access the development version, please follow the below instructions or simply use `make install-dev` after cloning the repository.  Due to the dependencies of `pystan==2.19.1.1`, it is recommended to fulfill condition `python<=3.8` to have the best experience.
 
 ```bash
 $ git clone https://github.com/edwinnglabs/karpiu.git
@@ -21,61 +21,6 @@ $ pip install -r requirements.txt
 $ pip install -r requirements-test.txt
 $ pip install -r requirements-docs.txt
 $ pip install -e .
-```
-
-# Quick Start
-
-Load data
-```python
-import import pandas as pd
-
-RAW_DATA_FILE = 'data.csv'
-df = pd.read_csv(RAW_DATA_FILE, parse_dates=['date'])
-
-adstock_df = pd.read_csv('./adstock.csv')
-adstock_df = adstock_df.sort_values(by=['regressor'])
-adstock_df = adstock_df.set_index('regressor')
-paid_channels = ['tv', 'radio', 'social', 'promo', 'search']
-```
-
-Build a basic MMM
-```python
-from karpiu.models import MMM
-mmm = MMM(
-    kpi_col='sales',
-    date_col='date', 
-    spend_cols=paid_channels,
-    event_cols=[],
-    seed=2022,
-    adstock_df=adstock_df,
-)
-mmm.optim_hyper_params(df)
-mmm.fit(df)
-```
-
-Extract attribution from model
-```python
-from karpiu.explainer import Attributor
-ATTR_START = '2019-03-01'
-ATTR_END = '2019-03-31'
-attributor = Attributor(model=mmm, start=ATTR_START, end=ATTR_END)
-activities_attr_df, spend_attr_df, spend_df, cost_df = attributor.make_attribution()
-```
-
-A visualization of attribution
-```python
-import matplotlib.pyplot as plt
-fig, ax = plt.subplots(1, 1, figsize=(16, 8))
-ax.stackplot(
-    activities_attr_df['date'].values, 
-    activities_attr_df[['organic'] + paid_channels].values.transpose(), 
-    labels=['organic'] + paid_channels
-)
-ax.set_title("Attribution by Activities Date", fontdict={'fontsize': 24})
-ax.set_xlabel("date", fontdict={'fontsize': 18})
-ax.set_ylabel("sales", fontdict={'fontsize': 18})
-fig.legend()
-fig.tight_layout();
 ```
 
 # Related Work
