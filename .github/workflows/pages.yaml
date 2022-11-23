@@ -9,6 +9,11 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v2
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get install libxml2-dev libxslt-dev python-dev
+          pip install -r requirements-docs.txt
+
       - name: Deployment
         uses: mhausenblas/mkdocs-deploy-gh-pages@master
         env:
