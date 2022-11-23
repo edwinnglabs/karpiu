@@ -11,8 +11,7 @@ from ..explainability import Attributor
 from ..utils import adstock_process
 
 
-
-# TODO: 
+# TODO:
 # add more issues e.g.
 # 1. add individual budget constraints
 # 2. add tutorials and demo
@@ -20,6 +19,7 @@ from ..utils import adstock_process
 # 4. add better auto doc workflow
 # 5. add unit test of attribution
 # 6. add unit test of optimization
+
 
 class BudgetOptimizer:
     """Base class for optimization solution"""
@@ -46,7 +46,11 @@ class BudgetOptimizer:
         self.budget_end = pd.to_datetime(budget_end)
         self.optim_channel = optim_channel
         self.optim_channel.sort()
-        self.logger.info("Optimizing channels is sorted. They are now : {}".format(self.optim_channel))
+        self.logger.info(
+            "Optimizing channels is sorted. They are now : {}".format(
+                self.optim_channel
+            )
+        )
         # TODO: check optim channel is in the model.spend_cols
         self.response_scaler = response_scaler
         self.spend_scaler = spend_scaler
@@ -97,7 +101,7 @@ class BudgetOptimizer:
         # (n_budget_steps + n_max_adstock, )
         self.base_comp = attr_obj.base_comp[self.n_max_adstock :]
 
-        # store some numpy arrays for channels to be optimized so that it can be 
+        # store some numpy arrays for channels to be optimized so that it can be
         # used in objective function
         self.optim_adstock_matrix = attr_obj.attr_adstock_matrix
         # (n_optim_channels, )
@@ -126,7 +130,7 @@ class BudgetOptimizer:
 
     def set_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints = constraints
-    
+
     def add_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints += constraints
 
@@ -141,10 +145,12 @@ class BudgetOptimizer:
         return total_budget_constraint
 
     def generate_individual_channel_constraints(self, delta=0.1):
-        constraints = list() 
-        init_spend_channel_total_arr = np.sum(self.init_spend_matrix, 0) / self.spend_scaler
+        constraints = list()
+        init_spend_channel_total_arr = (
+            np.sum(self.init_spend_matrix, 0) / self.spend_scaler
+        )
         for idx in range(self.n_optim_channels):
-            lb = (1 - delta) * init_spend_channel_total_arr[idx] 
+            lb = (1 - delta) * init_spend_channel_total_arr[idx]
             ub = (1 + delta) * init_spend_channel_total_arr[idx]
             A = np.zeros((self.n_budget_steps, self.n_optim_channels))
             A[:, idx] = 1.0
@@ -240,11 +246,7 @@ class RevenueMaximizer(BudgetOptimizer):
     lift-time values (LTV) per channel
     """
 
-    def __init__(
-        self,
-        ltv_arr: np.array,
-        **kwargs
-    ):
+    def __init__(self, ltv_arr: np.array, **kwargs):
         super().__init__(**kwargs)
         transformed_bkg_matrix = adstock_process(
             self.bkg_spend_matrix, self.optim_adstock_matrix
@@ -314,4 +316,3 @@ class RevenueMaximizer(BudgetOptimizer):
     #     optim_df.loc[self.budget_mask, self.optim_channel] = optim_spend_matrix
     #     self.curr_spend_matrix = optim_spend_matrix
     #     return optim_df
-
