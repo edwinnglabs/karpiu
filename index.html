@@ -6,7 +6,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta name="description" content="None">
         
-        <link rel="canonical" href="https://example.com/">
+        <link rel="canonical" href="https://edwinng.com/karpiu/">
         <link rel="shortcut icon" href="img/favicon.ico">
         <title>karpiu</title>
         <link href="css/bootstrap.min.css" rel="stylesheet">
@@ -37,26 +37,11 @@
                                 <a href="." class="nav-link">Home</a>
                             </li>
                             <li class="navitem">
-                                <a href="getting_started/" class="nav-link">Getting Started</a>
+                                <a href="examples/mmm-creation.ipynb" class="nav-link">Getting Started</a>
                             </li>
                         </ul>
 
                     <ul class="nav navbar-nav ml-auto">
-                        <li class="nav-item">
-                            <a href="#" class="nav-link" data-toggle="modal" data-target="#mkdocs_search_modal">
-                                <i class="fa fa-search"></i> Search
-                            </a>
-                        </li>
-                            <li class="nav-item">
-                                <a rel="prev" class="nav-link disabled">
-                                    <i class="fa fa-arrow-left"></i> Previous
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a rel="next" href="getting_started/" class="nav-link">
-                                    Next <i class="fa fa-arrow-right"></i>
-                                </a>
-                            </li>
                     </ul>
                 </div>
             </div>
@@ -114,9 +99,14 @@
 <h1 id="about-karpiu">About Karpiu</h1>
 <p><strong>Karpiu</strong> is a package designed for marketing mix modeling by calling <a href="https://github.com/uber/orbit">Orbit</a> from the backend. Karpiu is still in its beta version.  Please use it at your own risk.</p>
 <h1 id="installation">Installation</h1>
-<p>You need to install <code>orbit-ml</code> dev branch from github then install main branch <code>karpiu</code> from main branch</p>
-<pre><code class="language-bash">$ pip install --upgrade git+https://github.com/edwinnglabs/karpiu.git
-$ pip install --upgrade git+https://github.com/uber/orbit.git
+<p>To access the development version, please follow the below instructions or simply use <code>make install-dev</code> after cloning the repository.  Due to the dependencies of <code>pystan==2.19.1.1</code>, it is recommended to fulfill condition <code>python&lt;=3.8</code> to have the best experience.</p>
+<pre><code class="language-bash">$ git clone https://github.com/edwinnglabs/karpiu.git
+$ cd karpiu
+$ pip install pystan==2.19.1.1
+$ pip install -r requirements.txt
+$ pip install -r requirements-test.txt
+$ pip install -r requirements-docs.txt
+$ pip install -e .
 </code></pre>
 <h1 id="related-work">Related Work</h1>
 <h2 id="codebase">Codebase</h2>
@@ -156,29 +146,8 @@ by Benjamin Vincent.</li>
                 shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
         </script>
         <script src="js/base.js" defer></script>
-        <script src="search/main.js" defer></script>
 
-        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h4 class="modal-title" id="searchModalLabel">Search</h4>
-                <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-            </div>
-            <div class="modal-body">
-                <p>From here you can search these documents. Enter your search terms below.</p>
-                <form>
-                    <div class="form-group">
-                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
-                    </div>
-                </form>
-                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
-            </div>
-            <div class="modal-footer">
-            </div>
-        </div>
-    </div>
-</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+        <div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -224,5 +193,5 @@ by Benjamin Vincent.</li>
 
 <!--
 MkDocs version : 1.4.2
-Build Date UTC : 2022-11-07 02:10:11.983729+00:00
+Build Date UTC : 2022-11-23 04:27:30.578996+00:00
 -->
