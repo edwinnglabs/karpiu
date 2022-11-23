@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger("karpiu-planning")
 
 from ..models import MMM
-from ..explainability import adstock_process
+from ..utils import adstock_process
 
 
 class CostCurves:
@@ -499,7 +499,7 @@ def calculate_marginal_cost(
         attr_coef_array * np.log1p(attr_adstock_regressor_matrix / attr_sat_array),
         -1,
     )
-    mcac = np.empty(len(channels))
+    marginal_cost = np.empty(len(channels))
     for idx, ch in enumerate(channels):
         # (calc_steps, n_regressors)
         delta_matrix = np.zeros_like(attr_regressor_matrix)
@@ -516,11 +516,11 @@ def calculate_marginal_cost(
         )
 
         m_acq = np.exp(base_comp) * (np.exp(new_attr_comp) - np.exp(attr_comp))
-        mcac[idx] = np.sum(delta_matrix) / np.sum(m_acq)
+        marginal_cost[idx] = np.sum(delta_matrix) / np.sum(m_acq)
 
     return pd.DataFrame(
         {
             "regressor": channels,
-            "mcac": mcac,
+            "marginal_cost": marginal_cost,
         }
     ).set_index("regressor")

@@ -1,2 +1,2 @@
-from .cost import *
+from .calculator import *
 from .optim import *
