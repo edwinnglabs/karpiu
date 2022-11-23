@@ -1,9 +1,5 @@
 name: pages
-on:
-  push:
-    branches:
-      - main
-  page_build:
+on: [push]
 
 jobs:
   build:
