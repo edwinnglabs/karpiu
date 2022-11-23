@@ -4,12 +4,16 @@
 
 # Installation
 
-You need to install `orbit-ml` dev branch from github then install main branch `karpiu` from main branch
-
+To access the development version, please follow the below instructions or simply use `make install-dev` after cloning the repository.  Due to the dependencies of `pystan==2.19.1.1`, it is recommended to fulfill condition `python<=3.8` to have the best experience.
 
 ```bash
-$ pip install --upgrade git+https://github.com/edwinnglabs/karpiu.git
-$ pip install --upgrade git+https://github.com/uber/orbit.git
+$ git clone https://github.com/edwinnglabs/karpiu.git
+$ cd karpiu
+$ pip install pystan==2.19.1.1
+$ pip install -r requirements.txt
+$ pip install -r requirements-test.txt
+$ pip install -r requirements-docs.txt
+$ pip install -e .
 ```
 
 # Related Work

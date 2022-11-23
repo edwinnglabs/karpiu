@@ -3,4 +3,7 @@ site_url: https://edwinng.com/karpiu/
 
 nav:
   - Home: index.md
-  - Getting Started: getting_started.md
+  - Getting Started: ./examples/mmm-creation.ipynb
+
+plugins:
+  - mkdocs-jupyter
