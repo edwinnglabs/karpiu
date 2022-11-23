@@ -21,10 +21,13 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8]
     steps:
       - name: Setup Requirements
         run: |
-          pip install --upgrade -r requirements-docs.txt
+          pip install -r requirements-docs.txt
       - name: Build site
         run: mkdocs build
 
