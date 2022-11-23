@@ -34,7 +34,12 @@ jobs:
         run: |
           pip install -r requirements-docs.txt
       - name: Build site
-        run: mkdocs build
+        run: mkdocs build --site-dir _site
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          # Upload entire repository
+          path: '_site/'
 
   # Single deploy job since we're just deploying
   deploy:

@@ -143,6 +143,7 @@ dmypy.json
 
 # site
 site/
+_site/
 
 # poetry
 poetry.lock
