@@ -1,6 +1,6 @@
 [![build](https://github.com/edwinnglabs/karpiu/actions/workflows/build.yaml/badge.svg?event=push)](https://github.com/edwinnglabs/karpiu/actions/workflows/build.yaml)
 [![format](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml/badge.svg?event=push)](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml)
-
+[![pages](https://github.com/edwinnglabs/karpiu/actions/workflows/pages.yaml/badge.svg?branch=main)](https://github.com/edwinnglabs/karpiu/actions/workflows/pages.yaml)
 # Karpiu
 
 **Karpiu** is a package designed for Marketing Mix Modeling (MMM) by calling [Orbit](https://github.com/uber/orbit) from the backend. Karpiu is still in its beta version.  Please use it at your own risk.
