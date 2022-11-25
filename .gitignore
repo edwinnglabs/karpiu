@@ -147,3 +147,4 @@ _site/
 
 # poetry
 poetry.lock
+*.webp
