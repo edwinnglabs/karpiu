@@ -5,7 +5,7 @@ nav:
   - Home: index.md
   - Examples: 
     - Quickstart: ./examples/quickstart.ipynb
-    - Attribution: ./examples/attributiion.ipynb
+    - Attribution: ./examples/attribution.ipynb
     - Optimization: .examples/optimization.ipynb
 
 plugins:
