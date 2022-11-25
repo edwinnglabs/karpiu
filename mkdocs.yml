@@ -6,7 +6,7 @@ nav:
   - Examples: 
     - Quickstart: ./examples/quickstart.ipynb
     - Attribution: ./examples/attribution.ipynb
-    - Optimization: .examples/optimization.ipynb
+    - Optimization: ./examples/optimization.ipynb
 
 plugins:
   - mkdocs-jupyter
