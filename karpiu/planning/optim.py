@@ -30,7 +30,7 @@ class BudgetOptimizer:
         budget_start: str,
         budget_end: str,
         optim_channel: str,
-        response_scaler: float = 1e2,
+        response_scaler: float = 1e1,
         spend_scaler: float = 1e4,
         logger: Optional[logging.Logger] = None,
     ):
@@ -184,7 +184,7 @@ class BudgetOptimizer:
         self,
         init: Optional[np.array] = None,
         maxiter: int = 2,
-        eps: float = 1.0,
+        eps: float = 1e-03,
         ftol: float = 1e-07,
     ) -> None:
 
