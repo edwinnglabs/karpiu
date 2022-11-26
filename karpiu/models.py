@@ -168,7 +168,7 @@ class MMM:
             # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=regressor_cols,
-            regressor_sigma_prior=[10.0] * len(regressor_cols),
+            regressor_sigma_prior=[1.0] * len(regressor_cols),
             date_col=self.date_col,
             # uses mcmc for high dimensional features selection
             estimator="stan-mcmc",
@@ -257,7 +257,7 @@ class MMM:
             regressor_col=regressors,
             # only include events and seasonality in hyper-params screening
             regressor_sign=["="] * len(regressors),
-            regressor_sigma_prior=[10.0] * len(regressors),
+            regressor_sigma_prior=[1.0] * len(regressors),
             date_col=self.date_col,
             # 4 weeks
             forecast_horizon=28,
@@ -296,6 +296,7 @@ class MMM:
         self,
         df: pd.DataFrame,
     ) -> None:
+        logger.info("Deriving saturation constants...")
         # rebuild a base everytime it fits data
         self.saturation_df = (
             df[self.spend_cols].apply(non_zero_quantile, q=0.5).reset_index()
@@ -320,6 +321,49 @@ class MMM:
             raise Exception("All spend scalability needs to be > 0.")
         self.saturation_df = self.saturation_df.set_index("regressor")
 
+        logger.info("Derived saturation constants.")
+
+    def _preprocess_df(
+        self,
+        df: pd.DataFrame,
+        transform_response: bool = True,
+    ) -> pd.DataFrame:
+        logger.debug("Pre-process data.")
+
+        # adstock transformed data-frame will lose first n_max_adstock observations
+        n_max_adstock = self.get_max_adstock()
+        adstock_matrix = self.get_adstock_matrix()
+        # (n_steps - max_adstock, ...)
+        transform_df = df[n_max_adstock:].reset_index(drop=True)
+        transform_df[self.spend_cols] = adstock_process(
+            regressor_matrix=df[self.spend_cols].values,
+            adstock_matrix=adstock_matrix,
+        )
+
+        # log-log transformation
+        # (n_regressor, )
+        sat_array = self.get_saturation_vector(regressors=self.spend_cols)
+        # (n_steps,  n_regressors)
+        transform_df[self.spend_cols] = np.log1p(
+            transform_df[self.spend_cols].values / sat_array
+        )
+
+        if transform_response:
+            transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
+
+        if self.control_feat_cols:
+            transform_df[self.control_feat_cols] = np.log1p(
+                transform_df[self.control_feat_cols]
+            )
+
+        if len(self.fs_orders) > 0:
+            for s, fs_order in zip(self.seasonality, self.fs_orders):
+                transform_df, _ = make_fourier_series_df(
+                    transform_df, prefix="s{}_".format(s), period=s, order=fs_order
+                )
+
+        return transform_df
+
     def fit(
         self,
         df: pd.DataFrame,
@@ -331,39 +375,10 @@ class MMM:
     ) -> None:
 
         logger.info("Fit final model.")
+        raw_df = df.copy()
         self.raw_df = df.copy()
-        transform_df = df.copy()
-        logger.info("Pre-process data.")
-        transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
-        transform_df[self.control_feat_cols] = np.log1p(
-            transform_df[self.control_feat_cols]
-        )
-        self._derive_saturation(transform_df)
-        sat_array = self.saturation_df["saturation"].values
-
-        # transformed data-frame would lose first n(=adstock size) observations due to adstock process
-        adstock_matrix = self.get_adstock_matrix()
-        max_adstock = self.get_max_adstock()
-
-        new_transform_df = transform_df[max_adstock:].reset_index(drop=True)
-        new_transform_df[self.spend_cols] = adstock_process(
-            regressor_matrix=transform_df[self.spend_cols].values,
-            adstock_matrix=adstock_matrix,
-        )
-        # remove the old df
-        transform_df = new_transform_df.copy()
-
-        # dim: time x num of regressors
-        transform_df[self.spend_cols] = transform_df[
-            self.spend_cols
-        ].values / sat_array.reshape(1, -1)
-        transform_df[self.spend_cols] = np.log1p(transform_df[self.spend_cols])
-
-        if len(self.fs_orders) > 0:
-            for s, fs_order in zip(self.seasonality, self.fs_orders):
-                transform_df, _ = make_fourier_series_df(
-                    transform_df, prefix="s{}_".format(s), period=s, order=fs_order
-                )
+        self._derive_saturation(raw_df)
+        transform_df = self._preprocess_df(raw_df)
 
         logger.info("Build a default regression scheme")
         reg_scheme = pd.DataFrame()
@@ -381,9 +396,7 @@ class MMM:
         reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
         reg_scheme["regressor_sigma_prior"] = [self.default_spend_sigma_prior] * len(
             self.spend_cols
-        ) + [10.0] * len(
-            self.fs_cols_flatten + self.event_cols + self.control_feat_cols
-        )
+        ) + [1.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme = reg_scheme.set_index("regressor")
 
         # replace original one with extra_priors if given
@@ -446,7 +459,7 @@ class MMM:
             spend_sigma_prior = list(
                 self.total_market_sigma_prior * reg_coefs / np.sum(reg_coefs)
             )
-            reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [10.0] * len(
+            reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [1.0] * len(
                 self.fs_cols_flatten + self.event_cols + self.control_feat_cols
             )
 
@@ -469,8 +482,9 @@ class MMM:
                 regressor_sigma_prior=reg_scheme["regressor_sigma_prior"].tolist(),
                 date_col=self.date_col,
                 estimator="stan-mcmc",
-                num_warmup=8000,
-                num_sample=4000,
+                num_warmup=num_warmup,
+                num_sample=num_sample,
+                chains=chains,
                 # use small sigma for global trend as this is a long-term daily model
                 global_trend_sigma_prior=0.001,
                 **self.best_params,
@@ -485,35 +499,12 @@ class MMM:
         self, df: pd.DataFrame, decompose: bool = False, **kwargs
     ) -> pd.DataFrame:
         # TODO: can make transformation a module
-        transform_df = df.copy()
-        sat_array = self.saturation_df["saturation"].values
 
-        if len(self.fs_orders) > 0:
-            for s, fs_order in zip(self.seasonality, self.fs_orders):
-                transform_df, _ = make_fourier_series_df(
-                    transform_df, prefix="s{}_".format(s), period=s, order=fs_order
-                )
-
-        # transformed data-frame would lose the first n(=adstock) observations due to the adstock process
-        adstock_matrix = self.get_adstock_matrix()
-        max_adstock = self.get_max_adstock()
-        new_transform_df = transform_df[max_adstock:].reset_index(drop=True)
-        new_transform_df[self.spend_cols] = adstock_process(
-            regressor_matrix=transform_df[self.spend_cols].values,
-            adstock_matrix=adstock_matrix,
-        )
-        # (n_steps - max_adstock, ...)
-        transform_df = new_transform_df
-
-        # (n_steps,  n_regressors)
-        transform_df[self.spend_cols] = np.log1p(
-            transform_df[self.spend_cols].values / sat_array
-        )
-        transform_df[self.control_feat_cols] = np.log1p(
-            transform_df[self.control_feat_cols].values
-        )
+        df = df.copy()
+        transform_df = self._preprocess_df(df, transform_response=False)
 
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
+
         # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [
             x
@@ -525,6 +516,7 @@ class MMM:
         pred_base = df[[self.date_col]]
         # preserve the shape of original input; first n(=adstock) will have null values
         pred = pd.merge(pred_base, pred, on=[self.date_col], how="left")
+        n_max_adstock = self.get_max_adstock()
 
         # unlike orbit, decompose the regression and seasonal regression here
         if decompose:
@@ -536,7 +528,7 @@ class MMM:
             x_paid = transform_df[self.spend_cols].values
             reg_paid = np.concatenate(
                 [
-                    np.full(max_adstock, fill_value=np.nan),
+                    np.full(n_max_adstock, fill_value=np.nan),
                     np.sum(coef_paid * x_paid, -1),
                 ]
             )
@@ -549,7 +541,7 @@ class MMM:
                 # workaround with period that was unknown due to adstock
                 reg_event = np.concatenate(
                     [
-                        np.full(max_adstock, fill_value=np.nan),
+                        np.full(n_max_adstock, fill_value=np.nan),
                         np.sum(coef_event * x_event, -1),
                     ]
                 )
@@ -563,7 +555,7 @@ class MMM:
                     # workaround with period that was unknown due to adstock
                     reg_fs = np.concatenate(
                         [
-                            np.full(max_adstock, fill_value=np.nan),
+                            np.full(n_max_adstock, fill_value=np.nan),
                             np.sum(coef_fs * x_fs, -1),
                         ]
                     )
@@ -576,7 +568,7 @@ class MMM:
                 # workaround with period that was unknown due to adstock
                 reg_control = np.concatenate(
                     [
-                        np.full(max_adstock, fill_value=np.nan),
+                        np.full(n_max_adstock, fill_value=np.nan),
                         np.sum(coef_control * x_control, -1),
                     ]
                 )
@@ -691,6 +683,17 @@ class MMM:
     def get_saturation(self):
         # in the same order of spend
         return deepcopy(self.saturation_df)
+
+    def get_saturation_vector(
+        self,
+        regressors: Optional[List[str]] = None,
+    ) -> np.array:
+        sat_df = self.get_saturation()
+        if regressors is not None:
+            sat_array = sat_df.loc[regressors, "saturation"].values
+        else:
+            sat_array = sat_df.loc[:, "saturation"].values
+        return sat_array
 
     def get_extra_priors(self):
         return deepcopy(self.extra_priors)
