@@ -324,13 +324,13 @@ class MMM:
         logger.info("Derived saturation constants.")
 
     def _preprocess_df(
-        self, 
-        df: pd.DataFrame, 
+        self,
+        df: pd.DataFrame,
         transform_response: bool = True,
     ) -> pd.DataFrame:
         logger.debug("Pre-process data.")
 
-        # adstock transformed data-frame will lose first n_max_adstock observations 
+        # adstock transformed data-frame will lose first n_max_adstock observations
         n_max_adstock = self.get_max_adstock()
         adstock_matrix = self.get_adstock_matrix()
         # (n_steps - max_adstock, ...)
@@ -364,8 +364,6 @@ class MMM:
 
         return transform_df
 
-
-
     def fit(
         self,
         df: pd.DataFrame,
@@ -398,9 +396,7 @@ class MMM:
         reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
         reg_scheme["regressor_sigma_prior"] = [self.default_spend_sigma_prior] * len(
             self.spend_cols
-        ) + [1.0] * len(
-            self.fs_cols_flatten + self.event_cols + self.control_feat_cols
-        )
+        ) + [1.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme = reg_scheme.set_index("regressor")
 
         # replace original one with extra_priors if given
@@ -500,10 +496,7 @@ class MMM:
         self.regression_scheme = reg_scheme
 
     def predict(
-        self, 
-        df: pd.DataFrame, 
-        decompose: bool = False, 
-        **kwargs
+        self, df: pd.DataFrame, decompose: bool = False, **kwargs
     ) -> pd.DataFrame:
         # TODO: can make transformation a module
 
@@ -511,7 +504,7 @@ class MMM:
         transform_df = self._preprocess_df(df, transform_response=False)
 
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
-        
+
         # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [
             x
@@ -692,7 +685,7 @@ class MMM:
         return deepcopy(self.saturation_df)
 
     def get_saturation_vector(
-        self, 
+        self,
         regressors: Optional[List[str]] = None,
     ) -> np.array:
         sat_df = self.get_saturation()
