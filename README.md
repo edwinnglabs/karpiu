@@ -35,8 +35,7 @@ $ pip install -e .
 
 ## Research
 - [Ng, E., Wang, Z. & Dai, A. (2021) Bayesian Time Varying Coefficient Model with Applications to
-Marketing Mix Modeling]
-(http://papers.adkdd.org/2021/papers/adkdd21-ng-bayesian.pdf)
+Marketing Mix Modeling](http://papers.adkdd.org/2021/papers/adkdd21-ng-bayesian.pdf)
 - [Jin, Y., Wang, Y., Sun, Y., Chan, D., & Koehler, J. (2017). Bayesian Methods for Media Mix Modeling with Carryover and Shape Effects. Google Inc.](https://research.google/pubs/pub46001/)
 - [Chan, D., & Perry, M. (2017). Challenges and Opportunities in Media Mix Modeling.](https://research.google/pubs/pub45998/)
 - [Sun, Y., Wang, Y., Jin, Y., Chan, D., & Koehler, J. (2017). Geo-level Bayesian Hierarchical Media Mix Modeling.](https://research.google/pubs/pub46000/)
