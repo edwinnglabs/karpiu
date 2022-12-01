@@ -70,7 +70,7 @@ def test_mmm_fit_predict(seed, adstock_args):
     mmm.fit(df, num_warmup=400, num_sample=100, chains=4)
 
     saturation_df = mmm.get_saturation()
-    assert saturation_df.index.name == ["regressor"]
+    assert saturation_df.index.name == "regressor"
     assert saturation_df.index == mmm.get_spend_cols()
 
     pred_df = mmm.predict(df)
