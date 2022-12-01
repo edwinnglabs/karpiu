@@ -297,7 +297,7 @@ class MMM:
     def derive_saturation(
         self,
         df: pd.DataFrame,
-        q: Optional[float] = None,
+        q: Optional[float] = 0.1,
         scalability_df: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         logger.info("Deriving saturation constants...")
@@ -394,6 +394,10 @@ class MMM:
     ) -> None:
 
         logger.info("Fit final model.")
+
+        if self.saturation_df is None:
+            self.derive_saturation(df)
+
         raw_df = df.copy()
         self.raw_df = df.copy()
         # self._derive_saturation(raw_df)

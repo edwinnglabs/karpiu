@@ -63,11 +63,16 @@ def test_mmm_fit_predict(seed, adstock_args):
         kpi_col="sales",
         date_col="date",
         spend_cols=channels,
-        scalability_df=scalability_df,
         seed=seed,
         adstock_df=adstock_df,
     )
+    mmm.derive_saturation(df=df, scalability_df=scalability_df)
     mmm.fit(df, num_warmup=400, num_sample=100, chains=4)
+
+    saturation_df = mmm.get_saturation()
+    assert saturation_df.index.name == ["regressor"]
+    assert saturation_df.index == mmm.get_spend_cols()
+
     pred_df = mmm.predict(df)
     # make sure it returns the same shape
     assert pred_df.shape[0] == n_steps
