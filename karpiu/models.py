@@ -12,6 +12,7 @@ from .utils import adstock_process, non_zero_quantile
 
 logger = logging.getLogger("karpiu-mmm")
 
+EVENT_REGRESSOR_SIGMA = 10.0
 
 class MMM:
     """The core class of building a MMM
@@ -41,7 +42,7 @@ class MMM:
         date_col: str,
         spend_cols: List[str],
         adstock_df: pd.DataFrame,
-        scalability_df: Optional[pd.DataFrame] = None,
+        # scalability_df: Optional[pd.DataFrame] = None,
         control_feat_cols: Optional[List[str]] = None,
         event_cols: Optional[List[str]] = None,
         seasonality: Optional[List[int]] = None,
@@ -70,7 +71,7 @@ class MMM:
         self.spend_cols = deepcopy(spend_cols)
         self.default_spend_sigma_prior = default_spend_sigma_prior
         self.spend_cols.sort()
-        self.scalability_df = scalability_df
+        # self.scalability_df = scalability_df
 
         if event_cols is None:
             self.full_event_cols = list()
@@ -168,7 +169,7 @@ class MMM:
             # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=regressor_cols,
-            regressor_sigma_prior=[1.0] * len(regressor_cols),
+            regressor_sigma_prior=[EVENT_REGRESSOR_SIGMA] * len(regressor_cols),
             date_col=self.date_col,
             # uses mcmc for high dimensional features selection
             estimator="stan-mcmc",
@@ -257,7 +258,7 @@ class MMM:
             regressor_col=regressors,
             # only include events and seasonality in hyper-params screening
             regressor_sign=["="] * len(regressors),
-            regressor_sigma_prior=[1.0] * len(regressors),
+            regressor_sigma_prior=[EVENT_REGRESSOR_SIGMA] * len(regressors),
             date_col=self.date_col,
             # 4 weeks
             forecast_horizon=28,
@@ -292,36 +293,53 @@ class MMM:
         for k, v in self.best_params.items():
             logger.info("Best params {} set as {:.5f}".format(k, v))
 
-    def _derive_saturation(
+    def derive_saturation(
         self,
         df: pd.DataFrame,
-    ) -> None:
+        q: Optional[float] = None,
+        scalability_df: Optional[pd.DataFrame] = None,
+    ) -> pd.DataFrame:
         logger.info("Deriving saturation constants...")
-        # rebuild a base everytime it fits data
+        # rebuild a base every time it fits data
         self.saturation_df = (
-            df[self.spend_cols].apply(non_zero_quantile, q=0.5).reset_index()
+            df[self.spend_cols].apply(non_zero_quantile, q=q).reset_index()
         ).rename(columns={"index": "regressor", 0: "saturation_base"})
-        if set(self.spend_cols) != set(self.scalability_df["regressor"].tolist()):
-            raise Exception(
-                "Regressors between saturation based and scalability df are not perfectly matching."
+
+        if scalability_df is not None:
+            if set(self.spend_cols) != set(scalability_df["regressor"].tolist()):
+                raise Exception(
+                    "Regressors between saturation based and scalability df are not perfectly matching."
+                )
+
+            # left join to extract scalability condition and validate values
+            self.saturation_df = pd.merge(
+                self.saturation_df,
+                scalability_df,
+                on="regressor",
+                how="left",
             )
-        # left join the base with the condition
-        self.saturation_df = pd.merge(
-            self.saturation_df,
-            self.scalability_df,
-            on="regressor",
-            how="left",
-        )
+            scalability = self.saturation_df["scalability"].values
+            if np.any(scalability < 0):
+                raise Exception("All spend scalability needs to be > 0.")    
+        else:
+            self.saturation_df["scalability"] = 1.0
+
         # multiply the condition
-        scalability = self.saturation_df["scalability"].values
         self.saturation_df["saturation"] = (
             self.saturation_df["saturation_base"] * scalability
         )
-        if np.any(scalability < 0):
-            raise Exception("All spend scalability needs to be > 0.")
         self.saturation_df = self.saturation_df.set_index("regressor")
-
         logger.info("Derived saturation constants.")
+        return deepcopy(self.saturation_df)
+
+    def set_saturation(
+        self,
+        saturation_df,
+    ) -> None:
+        if not saturation_df.index.names == ['regressor']:
+            raise Exception("Saturation index must be set as: ['regressor'].")
+        self.saturation_df = deepcopy(saturation_df)
+        logger.info("Set saturation.")
 
     def _preprocess_df(
         self,
@@ -377,7 +395,7 @@ class MMM:
         logger.info("Fit final model.")
         raw_df = df.copy()
         self.raw_df = df.copy()
-        self._derive_saturation(raw_df)
+        # self._derive_saturation(raw_df)
         transform_df = self._preprocess_df(raw_df)
 
         logger.info("Build a default regression scheme")
@@ -396,7 +414,7 @@ class MMM:
         reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
         reg_scheme["regressor_sigma_prior"] = [self.default_spend_sigma_prior] * len(
             self.spend_cols
-        ) + [1.0] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
+        ) + [EVENT_REGRESSOR_SIGMA] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
         reg_scheme = reg_scheme.set_index("regressor")
 
         # replace original one with extra_priors if given
@@ -459,7 +477,7 @@ class MMM:
             spend_sigma_prior = list(
                 self.total_market_sigma_prior * reg_coefs / np.sum(reg_coefs)
             )
-            reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [1.0] * len(
+            reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [EVENT_REGRESSOR_SIGMA] * len(
                 self.fs_cols_flatten + self.event_cols + self.control_feat_cols
             )
 
@@ -494,6 +512,17 @@ class MMM:
             self._model.fit(transform_df, point_method="median")
 
         self.regression_scheme = reg_scheme
+
+        # validation
+        regression_summary = self.get_regression_summary()
+        spend_coefs = regression_summary.loc[regression_summary["regressor"].isin(self.spend_cols), "coef_p50"].values
+        spend_coefs_sum = np.sum(spend_coefs) 
+        if spend_coefs_sum > 1.0:
+            logger.warning("Spend channels regression coefficients sum ({}) exceeds 1.0. Users need to re-fit model with priors or saturations revised.".format(spend_coefs_sum))
+        elif spend_coefs_sum > 0.8:
+            logger.warning("Spend channels regression coefficients sum ({}) exceeds 0.8. Common range is (0, 0.8]. Consider re-fit model with priors or saturations revised.".format(spend_coefs_sum))
+        else:
+            logger.info("Spend channels regression coefficients sum ({}) is within common range (0, 0.8].".format(spend_coefs_sum))
 
     def predict(
         self, df: pd.DataFrame, decompose: bool = False, **kwargs
