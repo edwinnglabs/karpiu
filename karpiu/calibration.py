@@ -14,7 +14,7 @@ from typing import Optional, Dict, Any
 class PriorSolver:
     """Solving Regression Coefficient Prior from MMM by using Attribution logic"""
 
-    def __init__(self, tests_df:pd.DataFrame):
+    def __init__(self, tests_df: pd.DataFrame):
         self.tests_df = tests_df
 
     def derive_prior(self, model: MMM) -> pd.DataFrame:
@@ -61,13 +61,13 @@ class PriorSolver:
 
             init_search_pt = model.get_coef_vector([test_channel])
             coef_prior = fsolve(
-                attr_call_back, 
+                attr_call_back,
                 x0=init_search_pt,
-                 args=test_lift,
+                args=test_lift,
             )[0]
             coef_prior_upper = fsolve(
-                attr_call_back, 
-                x0=init_search_pt, 
+                attr_call_back,
+                x0=init_search_pt,
                 args=test_lift_upper,
             )[0]
 
@@ -83,7 +83,7 @@ class PriorSolver:
 
 
 def calibrate_model_with_test(
-    prev_model: MMM, 
+    prev_model: MMM,
     tests_df: pd.DataFrame,
     n_iter: int = 1,
     seed: Optional[int] = None,
@@ -91,9 +91,9 @@ def calibrate_model_with_test(
 ) -> MMM:
     """Generate a new model based on baseline model with extra priors; This function can be reiterated to generate final calibrated model."""
     spend_cols = prev_model.get_spend_cols()
-    kpi_col=prev_model.kpi_col
-    date_col=prev_model.date_col
-    spend_cols=prev_model.get_spend_cols()
+    kpi_col = prev_model.kpi_col
+    date_col = prev_model.date_col
+    spend_cols = prev_model.get_spend_cols()
     # TODO: should have a get function
     full_event_cols = deepcopy(prev_model.full_event_cols)
     seasonality = deepcopy(prev_model.seasonality)
@@ -101,29 +101,38 @@ def calibrate_model_with_test(
     adstock_df = prev_model.get_adstock_df()
 
     # make validation report
-    validation_entries_list = list() 
+    validation_entries_list = list()
 
     for n in range(n_iter):
         logger.info("{}/{} iteration:".format(n + 1, n_iter))
-        # solve ab-test priors 
+        # solve ab-test priors
         ps = PriorSolver(tests_df=tests_df)
         extra_priors = ps.derive_prior(prev_model)
-        extra_priors_input = extra_priors.groupby(by=['test_channel'])[['coef_prior', 'sigma_prior']].apply(
-            np.mean, axis=0,
-        ).reset_index()
+        extra_priors_input = (
+            extra_priors.groupby(by=["test_channel"])[["coef_prior", "sigma_prior"]]
+            .apply(
+                np.mean,
+                axis=0,
+            )
+            .reset_index()
+        )
 
         # derive rest of the priors from pervious posteriors
         reg_coef_df = prev_model._model.get_regression_coefs()
-        posteriors_carryover = {'test_channel':[], 'sigma_prior':[], 'coef_prior':[]}
+        posteriors_carryover = {"test_channel": [], "sigma_prior": [], "coef_prior": []}
         for ch in spend_cols:
-            if ch not in extra_priors_input['test_channel'].values:
-                posteriors_carryover['test_channel'].append(ch)
-                coef = reg_coef_df.loc[reg_coef_df['regressor'] == ch, 'coefficient'].values[0]
-                posteriors_carryover['coef_prior'].append(coef)
+            if ch not in extra_priors_input["test_channel"].values:
+                posteriors_carryover["test_channel"].append(ch)
+                coef = reg_coef_df.loc[
+                    reg_coef_df["regressor"] == ch, "coefficient"
+                ].values[0]
+                posteriors_carryover["coef_prior"].append(coef)
                 # use median x 0.01 as sigma to lock down previous posteriors as priors
-                posteriors_carryover['sigma_prior'].append(0.01 * coef)
+                posteriors_carryover["sigma_prior"].append(0.01 * coef)
         posteriors_carryover = pd.DataFrame(posteriors_carryover)
-        extra_priors_input = pd.concat([extra_priors_input, posteriors_carryover],axis=0)
+        extra_priors_input = pd.concat(
+            [extra_priors_input, posteriors_carryover], axis=0
+        )
 
         new_model = MMM(
             kpi_col=kpi_col,
@@ -148,20 +157,22 @@ def calibrate_model_with_test(
             new_model.fit(df, extra_priors=extra_priors_input)
 
         for idx, row in extra_priors.iterrows():
-            test_start = row.loc['test_start']
-            test_end = row.loc['test_end']
-            test_icac = row.loc['test_icac']
-            test_channel = row.loc['test_channel']
-            test_prior = row.loc['coef_prior']
-            test_lift = row.loc['test_lift']
+            test_start = row.loc["test_start"]
+            test_end = row.loc["test_end"]
+            test_icac = row.loc["test_icac"]
+            test_channel = row.loc["test_channel"]
+            test_prior = row.loc["coef_prior"]
+            test_lift = row.loc["test_lift"]
 
-            if test_channel not in tests_df['test_channel'].values:
+            if test_channel not in tests_df["test_channel"].values:
                 continue
 
             attr_obj = Attributor(new_model, start=test_start, end=test_end)
             attr_res = attr_obj.make_attribution()
             _, spend_attr_df, _, cost_df = attr_res
-            mask = (spend_attr_df[date_col] >= test_start) & (spend_attr_df[date_col] <= test_end)
+            mask = (spend_attr_df[date_col] >= test_start) & (
+                spend_attr_df[date_col] <= test_end
+            )
             total_attr = np.sum(spend_attr_df.loc[mask, test_channel].values)
             mask = (df[date_col] >= test_start) & (df[date_col] <= test_end)
             total_spend = np.sum(df.loc[mask, test_channel].values)
@@ -171,12 +182,12 @@ def calibrate_model_with_test(
             # print("Solver Result. ICAC: {:.3f} Total Lift {:.3f}".format(total_spend / total_attr, total_attr))
 
             validation_entry = {
-                'iteration': n, 
-                'channel': test_channel, 
-                'input_cost': test_icac, 
-                'input_lift': test_lift, 
-                'solver_cost': total_spend / total_attr, 
-                'solver_lift':total_attr,
+                "iteration": n,
+                "channel": test_channel,
+                "input_cost": test_icac,
+                "input_lift": test_lift,
+                "solver_cost": total_spend / total_attr,
+                "solver_lift": total_attr,
             }
             validation_entries_list.append(validation_entry)
             # end of test channel iterations

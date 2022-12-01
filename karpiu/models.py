@@ -14,6 +14,7 @@ logger = logging.getLogger("karpiu-mmm")
 
 EVENT_REGRESSOR_SIGMA = 10.0
 
+
 class MMM:
     """The core class of building a MMM
 
@@ -320,7 +321,7 @@ class MMM:
             )
             scalability = self.saturation_df["scalability"].values
             if np.any(scalability < 0):
-                raise Exception("All spend scalability needs to be > 0.")    
+                raise Exception("All spend scalability needs to be > 0.")
         else:
             self.saturation_df["scalability"] = 1.0
 
@@ -336,7 +337,7 @@ class MMM:
         self,
         saturation_df,
     ) -> None:
-        if not saturation_df.index.names == ['regressor']:
+        if not saturation_df.index.names == ["regressor"]:
             raise Exception("Saturation index must be set as: ['regressor'].")
         self.saturation_df = deepcopy(saturation_df)
         logger.info("Set saturation.")
@@ -414,7 +415,9 @@ class MMM:
         reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
         reg_scheme["regressor_sigma_prior"] = [self.default_spend_sigma_prior] * len(
             self.spend_cols
-        ) + [EVENT_REGRESSOR_SIGMA] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
+        ) + [EVENT_REGRESSOR_SIGMA] * len(
+            self.fs_cols_flatten + self.event_cols + self.control_feat_cols
+        )
         reg_scheme = reg_scheme.set_index("regressor")
 
         # replace original one with extra_priors if given
@@ -477,9 +480,9 @@ class MMM:
             spend_sigma_prior = list(
                 self.total_market_sigma_prior * reg_coefs / np.sum(reg_coefs)
             )
-            reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [EVENT_REGRESSOR_SIGMA] * len(
-                self.fs_cols_flatten + self.event_cols + self.control_feat_cols
-            )
+            reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [
+                EVENT_REGRESSOR_SIGMA
+            ] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
 
             if self.extra_priors is not None:
                 for idx, row in self.extra_priors.iterrows():
@@ -515,14 +518,28 @@ class MMM:
 
         # validation
         regression_summary = self.get_regression_summary()
-        spend_coefs = regression_summary.loc[regression_summary["regressor"].isin(self.spend_cols), "coef_p50"].values
-        spend_coefs_sum = np.sum(spend_coefs) 
+        spend_coefs = regression_summary.loc[
+            regression_summary["regressor"].isin(self.spend_cols), "coef_p50"
+        ].values
+        spend_coefs_sum = np.sum(spend_coefs)
         if spend_coefs_sum > 1.0:
-            logger.warning("Spend channels regression coefficients sum ({}) exceeds 1.0. Users need to re-fit model with priors or saturations revised.".format(spend_coefs_sum))
+            logger.warning(
+                "Spend channels regression coefficients sum ({}) exceeds 1.0. Users need to re-fit model with priors or saturations revised.".format(
+                    spend_coefs_sum
+                )
+            )
         elif spend_coefs_sum > 0.8:
-            logger.warning("Spend channels regression coefficients sum ({}) exceeds 0.8. Common range is (0, 0.8]. Consider re-fit model with priors or saturations revised.".format(spend_coefs_sum))
+            logger.warning(
+                "Spend channels regression coefficients sum ({}) exceeds 0.8. Common range is (0, 0.8]. Consider re-fit model with priors or saturations revised.".format(
+                    spend_coefs_sum
+                )
+            )
         else:
-            logger.info("Spend channels regression coefficients sum ({}) is within common range (0, 0.8].".format(spend_coefs_sum))
+            logger.info(
+                "Spend channels regression coefficients sum ({}) is within common range (0, 0.8].".format(
+                    spend_coefs_sum
+                )
+            )
 
     def predict(
         self, df: pd.DataFrame, decompose: bool = False, **kwargs
