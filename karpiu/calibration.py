@@ -17,16 +17,18 @@ class PriorSolver:
     def __init__(self, tests_df: pd.DataFrame):
         self.tests_df = tests_df.copy()
 
-    def derive_prior(self, model: MMM, shuffle: bool = False, debug: bool = False) -> pd.DataFrame:
+    def derive_prior(
+        self, model: MMM, shuffle: bool = False, debug: bool = False
+    ) -> pd.DataFrame:
         # TODO: shuffle is not useful for now as it always solves from the same initial model
         input_df = model.raw_df.copy()
         if shuffle:
-            tests_df = self.tests_df .sample(frac=1, ignore_index=True)
+            tests_df = self.tests_df.sample(frac=1, ignore_index=True)
         else:
-            tests_df = self.tests_df .copy()
+            tests_df = self.tests_df.copy()
         output_df = tests_df.copy()
         date_col = model.date_col
-        
+
         if debug:
             return tests_df
         else:
@@ -38,7 +40,9 @@ class PriorSolver:
                 test_se = row["test_se"]
 
                 # derive test spend
-                mask = (input_df[date_col] >= test_start) & (input_df[date_col] <= test_end)
+                mask = (input_df[date_col] >= test_start) & (
+                    input_df[date_col] <= test_end
+                )
                 sub_input_df = input_df[mask].reset_index(drop=True)
                 test_spend = sub_input_df[test_channel].sum()
                 # derive lift from spend data from model to ensure consistency
@@ -75,11 +79,15 @@ class PriorSolver:
                 )[0]
                 logger.info("test channel:{}".format(test_channel))
                 logger.info(
-                    "test spend: {:.3f}, test lift: {:.3f}".format(test_spend, test_lift)
+                    "test spend: {:.3f}, test lift: {:.3f}".format(
+                        test_spend, test_lift
+                    )
                 )
                 sigma_prior = (coef_prior_upper - coef_prior) * 0.3
                 logger.info(
-                    "coef prior: {:.3f}, sigma prior: {:.3f}".format(coef_prior, sigma_prior)
+                    "coef prior: {:.3f}, sigma prior: {:.3f}".format(
+                        coef_prior, sigma_prior
+                    )
                 )
 
                 # store derived result
@@ -125,17 +133,31 @@ def calibrate_model_with_test(
         # curr_priors_unique has row for each channel only (combining all tests within a channel)
         if len(validation_dfs_list) > 0:
             tighter_prior_mask = (
-                (prev_validation_df['solver_cost'] >= prev_validation_df['input_cost_upper_1se']) |
-                (prev_validation_df['solver_cost'] <= prev_validation_df['input_cost_lower_1se'])
+                prev_validation_df["solver_cost"]
+                >= prev_validation_df["input_cost_upper_1se"]
+            ) | (
+                prev_validation_df["solver_cost"]
+                <= prev_validation_df["input_cost_lower_1se"]
             )
             if tighter_prior_mask.sum() > 0:
-                tighter_prior_tests = prev_validation_df.loc[tighter_prior_mask, "test_name"].values
-                tighter_sigma_prior = prev_validation_df.loc[tighter_prior_mask, "sigma_prior"].values * 0.5
-                logger.info("Reduce sigma priors (50%) for test(s):{}".format(tighter_prior_tests))
+                tighter_prior_tests = prev_validation_df.loc[
+                    tighter_prior_mask, "test_name"
+                ].values
+                tighter_sigma_prior = (
+                    prev_validation_df.loc[tighter_prior_mask, "sigma_prior"].values
+                    * 0.5
+                )
+                logger.info(
+                    "Reduce sigma priors (50%) for test(s):{}".format(
+                        tighter_prior_tests
+                    )
+                )
                 logger.info("Reduced sigma priors:{}".format(tighter_sigma_prior))
 
-                curr_priors_full = curr_priors_full.set_index("test_name") 
-                curr_priors_full.loc[tighter_prior_tests, "sigma_prior"] = tighter_sigma_prior
+                curr_priors_full = curr_priors_full.set_index("test_name")
+                curr_priors_full.loc[
+                    tighter_prior_tests, "sigma_prior"
+                ] = tighter_sigma_prior
                 curr_priors_full = curr_priors_full.reset_index()
 
         curr_priors_unique = (
@@ -152,7 +174,11 @@ def calibrate_model_with_test(
         else:
             # derive rest of the priors from pervious posteriors
             reg_coef_df = prev_model._model.get_regression_coefs()
-            posteriors_carryover = {"test_channel": [], "sigma_prior": [], "coef_prior": []}
+            posteriors_carryover = {
+                "test_channel": [],
+                "sigma_prior": [],
+                "coef_prior": [],
+            }
             for ch in spend_cols:
                 if ch not in curr_priors_unique["test_channel"].values:
                     posteriors_carryover["test_channel"].append(ch)
@@ -232,7 +258,7 @@ def calibrate_model_with_test(
                 }
                 validation_entries_list.append(validation_entry)
                 # end of test channel iterations
-            
+
             prev_validation_df = pd.DataFrame(validation_entries_list)
             validation_dfs_list.append(prev_validation_df)
             prev_model = deepcopy(new_model)

@@ -401,7 +401,7 @@ class CostCurves:
             plt.show()
         else:
             plt.close()
-        
+
         if self.curve_type == "individual":
             return axes
         else:
