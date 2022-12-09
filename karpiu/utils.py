@@ -11,7 +11,7 @@ from functools import reduce
 from typing import List
 
 
-def non_zero_quantile(x, q=0.75):
+def non_zero_quantile(x: np.array, q=0.75):
     assert len(x.shape) == 1
     new_x = x[x > 0]
     return np.quantile(new_x, q=q)

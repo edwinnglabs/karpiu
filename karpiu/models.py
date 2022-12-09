@@ -319,11 +319,12 @@ class MMM:
                 on="regressor",
                 how="left",
             )
-            scalability = self.saturation_df["scalability"].values
-            if np.any(scalability < 0):
-                raise Exception("All spend scalability needs to be > 0.")
         else:
             self.saturation_df["scalability"] = 1.0
+
+        scalability = self.saturation_df["scalability"].values
+        if np.any(scalability < 0):
+            raise Exception("All spend scalability needs to be > 0.")
 
         # multiply the condition
         self.saturation_df["saturation"] = (

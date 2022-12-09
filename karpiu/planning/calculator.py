@@ -220,6 +220,7 @@ class CostCurves:
         outcome_scaler: float = 1e3,
         optim_cost_curves: Optional[pd.DataFrame] = None,
         plot_margin: float = 0.05,
+        is_visible: bool = False,
     ) -> None:
 
         n_channels = len(self.channels)
@@ -240,7 +241,7 @@ class CostCurves:
         ].values
 
         if self.curve_type == "individual":
-            # mulitple cost curves
+            # multiple cost curves
             fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=(18, nrows * 4.5))
             axes = axes.flatten()
 
@@ -389,11 +390,22 @@ class CostCurves:
                 )
 
             handles, labels = ax.get_legend_handles_labels()
+        # exit from overall vs. individual cost curve
 
         fig.legend(
             handles, labels, loc=9, ncol=2, bbox_to_anchor=(0.5, 0), prop={"size": 18}
         )
         fig.tight_layout()
+
+        if is_visible:
+            plt.show()
+        else:
+            plt.close()
+        
+        if self.curve_type == "individual":
+            return axes
+        else:
+            return ax
 
 
 def calculate_marginal_cost(
