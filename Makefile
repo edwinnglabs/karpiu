@@ -1,6 +1,9 @@
 install-dev:
-	pip install pystan==2.19.1.1
+	# this works around the problem of installing from dev branch with cmdstanpy import
+	pip install cmdstanpy
 	pip install -r requirements.txt
+	# required by mkdocs
+	pip install poetry
 	pip install -r requirements-test.txt
 	pip install -r requirements-docs.txt
 	pip install -e .
