@@ -188,7 +188,7 @@ def make_info_logger(name: str, path: Optional[str] = None) -> logging.Logger:
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     if path is None:

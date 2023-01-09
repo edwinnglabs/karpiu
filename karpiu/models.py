@@ -763,3 +763,7 @@ class MMM:
 
     def get_raw_df(self):
         return deepcopy(self.raw_df)
+
+    def get_logger(self):
+        # not a deepcopy
+        return self.logger

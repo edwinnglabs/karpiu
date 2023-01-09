@@ -223,6 +223,7 @@ def calibrate_model_with_test(
                 seasonality=seasonality,
                 fs_orders=fs_orders,
                 adstock_df=adstock_df,
+                logger=prev_model.get_logger(),
                 # no market sigma constraint here
             )
             df = prev_model.get_raw_df()
