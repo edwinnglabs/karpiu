@@ -152,3 +152,6 @@ _site/
 # poetry
 poetry.lock
 *.webp
+
+# pickle; can be binary if forced but ignore as default
+*.pkl
