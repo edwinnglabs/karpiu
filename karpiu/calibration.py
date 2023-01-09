@@ -11,6 +11,7 @@ from .explainability import Attributor
 from .models import MMM
 from .utils import make_info_logger
 
+
 class PriorSolver:
     """Solving Regression Coefficient Prior from MMM by using Attribution logic"""
 
