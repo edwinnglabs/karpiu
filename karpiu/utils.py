@@ -5,10 +5,13 @@ import pandas as pd
 from datetime import datetime
 import holidays
 import re
+import logging
+from rich.logging import RichHandler
+
 from itertools import product
 from scipy.stats import mode as scipy_mode
 from functools import reduce
-from typing import List
+from typing import List, Dict, Any, Optional
 
 
 def non_zero_quantile(x: np.array, q=0.75):
@@ -152,13 +155,13 @@ def extend_ts_features(df, n_periods, date_col, rolling_window=30):
     return res
 
 
-def expand_grid(dictionary):
+def expand_grid(dictionary: Dict[str, Any]):
     return pd.DataFrame(
         [row for row in product(*dictionary.values())], columns=dictionary.keys()
     )
 
 
-def generate_posteriors_mode(posteriors, var_names):
+def generate_posteriors_mode(posteriors: Dict[str, np.array], var_names: str):
     posteriors_mode = {}
     for k, v in posteriors.items():
         if k in var_names:
@@ -173,3 +176,30 @@ def merge_dfs(
     how="inner",
 ) -> pd.DataFrame:
     return reduce(lambda left, right: pd.merge(left, right, on=on, how=how), dfs)
+
+
+def make_info_logger(name: str, path: Optional[str] = None) -> logging.Logger:
+    """generate new logger in a standardized way for Karpiu
+
+    Returns:
+        logging.Logger: _description_
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%s",
+    )
+
+    if path is None:
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+    else:
+        fh = logging.FileHandler(path, mode="w")
+        fh.setLevel(logging.INFO)
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
+
+    return logger

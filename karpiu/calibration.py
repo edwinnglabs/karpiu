@@ -1,15 +1,15 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import fsolve
-from .explainability import Attributor
-from .models import MMM
 from copy import deepcopy
 import logging
 
-logger = logging.getLogger("karpiu-mmm")
-
 from typing import Optional, Dict, Any
 
+
+from .explainability import Attributor
+from .models import MMM
+from .utils import make_info_logger
 
 class PriorSolver:
     """Solving Regression Coefficient Prior from MMM by using Attribution logic"""
@@ -18,9 +18,25 @@ class PriorSolver:
         self.tests_df = tests_df.copy()
 
     def derive_prior(
-        self, model: MMM, shuffle: bool = False, debug: bool = False
+        self,
+        model: MMM,
+        shuffle: bool = False,
+        debug: bool = False,
+        logger: Optional[logging.Logger] = None,
     ) -> pd.DataFrame:
-        # TODO: shuffle is not useful for now as it always solves from the same initial model
+        """Solving priors independently (and sequentially) based on each coefficients loc and scale input.
+
+        Args:
+            model (MMM): _description_
+            shuffle (bool, optional): _description_. Defaults to False.
+            debug (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            pd.DataFrame: _description_
+        """
+        if logger is None:
+            logger = make_info_logger(name="karpiu-calibration")
+
         input_df = model.raw_df.copy()
         if shuffle:
             tests_df = self.tests_df.sample(frac=1, ignore_index=True)
@@ -108,6 +124,7 @@ def calibrate_model_with_test(
     seed: Optional[int] = None,
     fit_args: Optional[Dict[str, Any]] = None,
     debug: bool = False,
+    logger: Optional[logging.Logger] = None,
 ) -> MMM:
     """Generate a new model based on baseline model with extra priors; This function can be reiterated to generate final calibrated model."""
     spend_cols = prev_model.get_spend_cols()
@@ -123,12 +140,15 @@ def calibrate_model_with_test(
     # make validation report
     validation_dfs_list = list()
 
+    if logger is None:
+        logger = make_info_logger("karpiu-calibration")
+
     # solve ab-test priors
     ps = PriorSolver(tests_df=tests_df)
     for n in range(n_iter):
         logger.info("{}/{} iteration:".format(n + 1, n_iter))
         # shuffle is not impacting as we solve all priors from same initial model
-        curr_priors_full = ps.derive_prior(prev_model, shuffle=False)
+        curr_priors_full = ps.derive_prior(prev_model, shuffle=False, logger=logger)
         # curr_priors_full has row for each test
         # curr_priors_unique has row for each channel only (combining all tests within a channel)
         if len(validation_dfs_list) > 0:
@@ -197,7 +217,6 @@ def calibrate_model_with_test(
                 kpi_col=kpi_col,
                 date_col=date_col,
                 spend_cols=spend_cols,
-                # TODO: should have a get function
                 event_cols=full_event_cols,
                 seed=seed,
                 seasonality=seasonality,

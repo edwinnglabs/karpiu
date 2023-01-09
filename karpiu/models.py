@@ -8,9 +8,7 @@ from orbit.models import DLT
 from orbit.utils.features import make_fourier_series_df
 from orbit.utils.params_tuning import grid_search_orbit
 
-from .utils import adstock_process, non_zero_quantile
-
-logger = logging.getLogger("karpiu-mmm")
+from .utils import adstock_process, non_zero_quantile, make_info_logger
 
 EVENT_REGRESSOR_SIGMA = 10.0
 
@@ -50,6 +48,7 @@ class MMM:
         fs_orders: Optional[List[int]] = None,
         total_market_sigma_prior: float = None,
         default_spend_sigma_prior: float = 0.1,
+        logger: Optional[logging.Logger] = None,
         **kwargs
     ):
         """
@@ -63,7 +62,13 @@ class MMM:
             fs_orders: orders of fourier terms; used in seasonality
             **kwargs:
         """
-        logger.info("Initialize model")
+
+        if logger is None:
+            self.logger = make_info_logger("karpiu-mmm")
+        else:
+            self.logger = logger
+
+        self.logger.info("Initialize model")
         self.kpi_col = kpi_col
         # for backtest purpose
         self.response_col = kpi_col
@@ -150,7 +155,7 @@ class MMM:
         chains: int = 1,
         **kwargs
     ):
-        logger.info("Screen events by Pr(coef>=0) >= 0.9 or Pr(coef>=0) <= 0.1.")
+        self.logger.info("Screen events by Pr(coef>=0) >= 0.9 or Pr(coef>=0) <= 0.1.")
         transform_df = df.copy()
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
         transform_df[self.full_control_feat_cols] = np.log1p(
@@ -203,12 +208,12 @@ class MMM:
         )
         self.regressors.sort()
 
-        logger.info(
+        self.logger.info(
             "Full features: {}".format(
                 self.full_event_cols + self.full_control_feat_cols
             )
         )
-        logger.info(
+        self.logger.info(
             "Selected features: {}".format(self.event_cols + self.control_feat_cols)
         )
 
@@ -219,23 +224,23 @@ class MMM:
             x for x in features if x in self.full_control_feat_cols
         ]
 
-        logger.info(
+        self.logger.info(
             "Full features: {}".format(
                 self.full_event_cols + self.full_control_feat_cols
             )
         )
-        logger.info(
+        self.logger.info(
             "Selected features: {}".format(self.event_cols + self.control_feat_cols)
         )
 
     def optim_hyper_params(
         self, df: pd.DataFrame, param_grid: Optional[Dict[str, Any]] = None, **kwargs
     ) -> None:
-        logger.info(
+        self.logger.info(
             "Optimize smoothing params. Only events and seasonality are involved."
         )
         transform_df = df.copy()
-        logger.info("Pre-process data.")
+        self.logger.info("Pre-process data.")
         transform_df[self.kpi_col] = np.log(transform_df[self.kpi_col])
         if len(self.fs_orders) > 0:
             for s, fs_order in zip(self.seasonality, self.fs_orders):
@@ -286,13 +291,13 @@ class MMM:
         self.tuning_df = tuning_df
 
         for k, v in self.best_params.items():
-            logger.info("Best params {} set as {:.5f}".format(k, v))
+            self.logger.info("Best params {} set as {:.5f}".format(k, v))
 
     def set_hyper_params(self, params: Dict[str, List]) -> None:
-        logger.info("Set hyper-parameters.")
+        self.logger.info("Set hyper-parameters.")
         self.best_params.update(params)
         for k, v in self.best_params.items():
-            logger.info("Best params {} set as {:.5f}".format(k, v))
+            self.logger.info("Best params {} set as {:.5f}".format(k, v))
 
     def derive_saturation(
         self,
@@ -300,7 +305,7 @@ class MMM:
         q: Optional[float] = 0.1,
         scalability_df: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
-        logger.info("Deriving saturation constants...")
+        self.logger.info("Deriving saturation constants...")
         # rebuild a base every time it fits data
         self.saturation_df = (
             df[self.spend_cols].apply(non_zero_quantile, q=q).reset_index()
@@ -331,7 +336,7 @@ class MMM:
             self.saturation_df["saturation_base"] * scalability
         )
         self.saturation_df = self.saturation_df.set_index("regressor")
-        logger.info("Derived saturation constants.")
+        self.logger.info("Derived saturation constants.")
         return deepcopy(self.saturation_df)
 
     def set_saturation(
@@ -341,14 +346,14 @@ class MMM:
         if not saturation_df.index.names == ["regressor"]:
             raise Exception("Saturation index must be set as: ['regressor'].")
         self.saturation_df = deepcopy(saturation_df)
-        logger.info("Set saturation.")
+        self.logger.info("Set saturation.")
 
     def _preprocess_df(
         self,
         df: pd.DataFrame,
         transform_response: bool = True,
     ) -> pd.DataFrame:
-        logger.debug("Pre-process data.")
+        self.logger.debug("Pre-process data.")
 
         # adstock transformed data-frame will lose first n_max_adstock observations
         n_max_adstock = self.get_max_adstock()
@@ -391,10 +396,11 @@ class MMM:
         num_warmup: int = 400,
         num_sample: int = 100,
         chains: int = 1,
+        stan_mcmc_args: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> None:
 
-        logger.info("Fit final model.")
+        self.logger.info("Fit final model.")
 
         if self.saturation_df is None:
             self.derive_saturation(df)
@@ -404,7 +410,7 @@ class MMM:
         # self._derive_saturation(raw_df)
         transform_df = self._preprocess_df(raw_df)
 
-        logger.info("Build a default regression scheme")
+        self.logger.info("Build a default regression scheme")
         reg_scheme = pd.DataFrame()
         # regressors should be in this order
         # spend_cols + fs_cols + event_cols + control_feat_cols
@@ -433,7 +439,7 @@ class MMM:
         if self.extra_priors is not None:
             for idx, row in self.extra_priors.iterrows():
                 test_channel = row["test_channel"]
-                logger.info("Updating {} prior".format(test_channel))
+                self.logger.info("Updating {} prior".format(test_channel))
                 reg_scheme.loc[test_channel, "regressor_coef_prior"] = row["coef_prior"]
                 reg_scheme.loc[test_channel, "regressor_sigma_prior"] = row[
                     "sigma_prior"
@@ -460,7 +466,7 @@ class MMM:
         # run it again to use sigma constraint and weight by original coefficient size
         if self.total_market_sigma_prior is not None:
             reg_coef_dfs = self._model.get_regression_coefs().set_index("regressor")
-            logger.info(
+            self.logger.info(
                 "Build a regression scheme with total marketing sigma constraint {:.3f}".format(
                     self.total_market_sigma_prior
                 )
@@ -492,7 +498,7 @@ class MMM:
             if self.extra_priors is not None:
                 for idx, row in self.extra_priors.iterrows():
                     test_channel = row["test_channel"]
-                    logger.info("Updating {} prior".format(test_channel))
+                    self.logger.info("Updating {} prior".format(test_channel))
                     reg_scheme.loc[test_channel, "regressor_coef_prior"] = row[
                         "coef_prior"
                     ]
@@ -528,19 +534,19 @@ class MMM:
         ].values
         spend_coefs_sum = np.sum(spend_coefs)
         if spend_coefs_sum > 1.0:
-            logger.warning(
+            self.logger.warning(
                 "Spend channels regression coefficients sum ({}) exceeds 1.0. Users need to re-fit model with priors or saturations revised.".format(
                     spend_coefs_sum
                 )
             )
         elif spend_coefs_sum > 0.8:
-            logger.warning(
+            self.logger.warning(
                 "Spend channels regression coefficients sum ({}) exceeds 0.8. Common range is (0, 0.8]. Consider re-fit model with priors or saturations revised.".format(
                     spend_coefs_sum
                 )
             )
         else:
-            logger.info(
+            self.logger.info(
                 "Spend channels regression coefficients sum ({}) is within common range (0, 0.8].".format(
                     spend_coefs_sum
                 )

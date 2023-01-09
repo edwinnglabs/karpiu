@@ -6,6 +6,8 @@ ipywidgets >= 8.0.2
 arviz>=0.12.1
 matplotlib >=3.5.2
 scipy>=1.8.1
+rich
+
 # install orbit from dev
 # orbit-ml @ git+https://github.com/uber/orbit.git@dev-114-cmdstan
 
