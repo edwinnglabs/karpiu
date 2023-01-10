@@ -176,7 +176,9 @@ def calibrate_model_with_test(
             # enforce strictly decreasing sigma; sigma is the minimum of the current or the previous
             all_test_names = prev_validation_df["test_name"].values
             prev_sigma_prior = prev_validation_df["sigma_prior"].values
-            curr_sigma_prior = curr_priors_full.loc[all_test_names, "sigma_prior"].values
+            curr_sigma_prior = curr_priors_full.loc[
+                all_test_names, "sigma_prior"
+            ].values
             applied_sigma_prior = np.minimum(prev_sigma_prior, curr_sigma_prior)
             curr_priors_full.loc[all_test_names, "sigma_prior"] = applied_sigma_prior
 
@@ -190,11 +192,22 @@ def calibrate_model_with_test(
             )
             # if haircut channel exists
             if haircut_mask.sum() > 0:
-                haircut_test_names = prev_validation_df.loc[haircut_mask, "test_name"].values
-                tighter_sigma_prior = haircut_ratio * curr_priors_full.loc[haircut_test_names, "sigma_prior"].values
-                logger.info("Reduce sigma priors ({:.3%}) for test(s):{}".format(haircut_ratio, haircut_test_names))
+                haircut_test_names = prev_validation_df.loc[
+                    haircut_mask, "test_name"
+                ].values
+                tighter_sigma_prior = (
+                    haircut_ratio
+                    * curr_priors_full.loc[haircut_test_names, "sigma_prior"].values
+                )
+                logger.info(
+                    "Reduce sigma priors ({:.3%}) for test(s):{}".format(
+                        haircut_ratio, haircut_test_names
+                    )
+                )
                 logger.info("Reduced sigma priors:{}".format(tighter_sigma_prior))
-                curr_priors_full.loc[haircut_test_names, "sigma_prior"] = tighter_sigma_prior
+                curr_priors_full.loc[
+                    haircut_test_names, "sigma_prior"
+                ] = tighter_sigma_prior
 
             # reset index for proper usage in other stages
             curr_priors_full = curr_priors_full.reset_index()
