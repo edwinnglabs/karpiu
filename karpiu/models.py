@@ -12,6 +12,7 @@ from .utils import adstock_process, non_zero_quantile, get_logger
 
 EVENT_REGRESSOR_SIGMA = 10.0
 
+
 class MMM:
     """The core class of building a MMM
 
@@ -63,7 +64,7 @@ class MMM:
         """
 
         if logger is None:
-            self.logger =  get_logger("karpiu-mmm")
+            self.logger = get_logger("karpiu-mmm")
         else:
             self.logger = logger
 

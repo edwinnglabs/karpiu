@@ -13,6 +13,7 @@ from .explainability import Attributor
 from .models import MMM
 from .utils import get_logger
 
+
 class PriorSolver:
     """Solving Regression Coefficient Prior from MMM by using Attribution logic"""
 
@@ -37,7 +38,7 @@ class PriorSolver:
             pd.DataFrame: _description_
         """
         if logger is None:
-            self.logger =  get_logger("karpiu-calibration")
+            self.logger = get_logger("karpiu-calibration")
 
         input_df = model.raw_df.copy()
         if shuffle:
@@ -252,7 +253,9 @@ def calibrate_model_with_test(
                 new_model.fit(df, extra_priors=extra_priors_input)
 
             validation_entries_list = list()
-            coef_posteriors_df = new_model.get_regression_summary().set_index("regressor")
+            coef_posteriors_df = new_model.get_regression_summary().set_index(
+                "regressor"
+            )
 
             for _, row in curr_priors_full.iterrows():
                 test_start = row.loc["test_start"]
@@ -312,30 +315,34 @@ def calibrate_model_with_test(
 
 def make_cost_calibration_plot(report_df: pd.DataFrame) -> matplotlib.axes:
     """Visualize cost calibration given report dataframe"""
-    test_names = report_df['test_name'].unique().tolist()
+    test_names = report_df["test_name"].unique().tolist()
     nrows = math.ceil(len(test_names) / 2)
     fig, axes = plt.subplots(nrows, 2, figsize=(20, 2 + 3.5 * nrows))
     axes = axes.flatten()
     for idx, name in enumerate(test_names):
-        mask = report_df['test_name'] == name
-        x = report_df.loc[mask, 'iteration'].values
-        y_input = report_df.loc[mask, 'input_cost'].values
-        y_solver = report_df.loc[mask, 'solver_cost'].values
-        y_input_upper = report_df.loc[mask, 'input_cost_upper_1se'].values
-        y_input_lower = report_df.loc[mask, 'input_cost_lower_1se'].values
+        mask = report_df["test_name"] == name
+        x = report_df.loc[mask, "iteration"].values
+        y_input = report_df.loc[mask, "input_cost"].values
+        y_solver = report_df.loc[mask, "solver_cost"].values
+        y_input_upper = report_df.loc[mask, "input_cost_upper_1se"].values
+        y_input_lower = report_df.loc[mask, "input_cost_lower_1se"].values
         axes[idx].set_title(name)
-        axes[idx].plot(x, y_solver, label='solver', color='orange', alpha=0.5)
-        axes[idx].plot(x, y_input, linestyle='--', label='input', color='dodgerblue', alpha=0.5)
-        axes[idx].fill_between(x, y_input_lower, y_input_upper, alpha=0.2, color='dodgerblue')
+        axes[idx].plot(x, y_solver, label="solver", color="orange", alpha=0.5)
+        axes[idx].plot(
+            x, y_input, linestyle="--", label="input", color="dodgerblue", alpha=0.5
+        )
+        axes[idx].fill_between(
+            x, y_input_lower, y_input_upper, alpha=0.2, color="dodgerblue"
+        )
 
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(
-        handles, 
-        labels, 
-        loc='lower center',
-        bbox_to_anchor=(0., 0.05, 1., 1.),
+        handles,
+        labels,
+        loc="lower center",
+        bbox_to_anchor=(0.0, 0.05, 1.0, 1.0),
         fancybox=True,
-        shadow=True, 
+        shadow=True,
         ncols=2,
         fontsize=18,
     )
@@ -345,30 +352,35 @@ def make_cost_calibration_plot(report_df: pd.DataFrame) -> matplotlib.axes:
 
 def make_coef_calibration_plot(report_df: pd.DataFrame) -> matplotlib.axes:
     """Visualize coefficients calibration given report dataframe"""
-    test_names = report_df['test_name'].unique().tolist()
+    test_names = report_df["test_name"].unique().tolist()
     nrows = math.ceil(len(test_names) / 2)
     fig, axes = plt.subplots(nrows, 2, figsize=(20, 2 + 3.5 * nrows))
     axes = axes.flatten()
     for idx, name in enumerate(test_names):
-        mask = report_df['test_name'] == name
-        x = report_df.loc[mask, 'iteration'].values
-        y_priors = report_df.loc[mask, 'coef_prior'].values
-        y_posteriors = report_df.loc[mask, 'coef_posterior'].values
-        y_priors_upper = y_priors + report_df.loc[mask, 'sigma_prior'].values
-        y_priors_lower = y_priors - report_df.loc[mask, 'sigma_prior'].values
+        mask = report_df["test_name"] == name
+        x = report_df.loc[mask, "iteration"].values
+        y_priors = report_df.loc[mask, "coef_prior"].values
+        y_posteriors = report_df.loc[mask, "coef_posterior"].values
+        y_priors_upper = y_priors + report_df.loc[mask, "sigma_prior"].values
+        y_priors_lower = y_priors - report_df.loc[mask, "sigma_prior"].values
         axes[idx].set_title(name)
-        axes[idx].plot(x, y_posteriors, label='posteriors', color='orange', alpha=0.5)
-        axes[idx].plot(x, y_priors, linestyle='--', label='priors', color='dodgerblue', alpha=0.5)
-        axes[idx].fill_between(x, y_priors_lower, y_priors_upper, alpha=0.2, color='dodgerblue')
+        axes[idx].plot(x, y_posteriors, label="posteriors", color="orange", alpha=0.5)
+        axes[idx].plot(
+            x, y_priors, linestyle="--", label="priors", color="dodgerblue", alpha=0.5
+        )
+        axes[idx].fill_between(
+            x, y_priors_lower, y_priors_upper, alpha=0.2, color="dodgerblue"
+        )
 
-
-    
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(
-        handles, labels, 
-        loc='lower center',
-        bbox_to_anchor=(0., 0.05, 1., 1.),
-        fancybox=True, shadow=True, ncols=2,
+        handles,
+        labels,
+        loc="lower center",
+        bbox_to_anchor=(0.0, 0.05, 1.0, 1.0),
+        fancybox=True,
+        shadow=True,
+        ncols=2,
         fontsize=18,
     )
     plt.close()
