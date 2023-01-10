@@ -16,8 +16,10 @@ To access the development version, please follow the below instructions or simpl
 ```bash
 $ git clone https://github.com/edwinnglabs/karpiu.git
 $ cd karpiu
-$ pip install pystan==2.19.1.1
+$ pip install cmdstanpy
 $ pip install -r requirements.txt
+# required by mkdocs
+$ pip install poetry
 $ pip install -r requirements-test.txt
 $ pip install -r requirements-docs.txt
 $ pip install -e .
