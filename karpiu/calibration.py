@@ -165,37 +165,36 @@ def calibrate_model_with_test(
     for n in range(n_iter):
         logger.info("{}/{} iteration:".format(n + 1, n_iter))
         # shuffle is not impacting as we solve all priors from same initial model
-        curr_priors_full = ps.derive_prior(prev_model, shuffle=False, logger=logger)
+        curr_priors_full = ps.derive_prior(prev_model, shuffle=False, logger=logger).set_index("test_name")
         # curr_priors_full has row for each test
         # curr_priors_unique has row for each channel only (combining all tests within a channel)
+        # len(validation_dfs_list) = number of runs
+        # check condition if this is first run
         if len(validation_dfs_list) > 0:
-            tighter_prior_mask = (
+            # for any channel solver cost beyond +/- 1se from input cost, make hair cut of the priors
+            haircut_mask = (
                 prev_validation_df["solver_cost"]
                 >= prev_validation_df["input_cost_upper_1se"]
             ) | (
                 prev_validation_df["solver_cost"]
                 <= prev_validation_df["input_cost_lower_1se"]
             )
-            if tighter_prior_mask.sum() > 0:
-                tighter_prior_tests = prev_validation_df.loc[
-                    tighter_prior_mask, "test_name"
-                ].values
-                tighter_sigma_prior = (
-                    prev_validation_df.loc[tighter_prior_mask, "sigma_prior"].values
-                    * 0.5
-                )
-                logger.info(
-                    "Reduce sigma priors (50%) for test(s):{}".format(
-                        tighter_prior_tests
-                    )
-                )
+            # if haircut channel exists
+            if haircut_mask.sum() > 0:
+                haircut_test_names = prev_validation_df.loc[haircut_mask, "test_name"].values
+                logger.info("Reduce sigma priors (50%) for test(s):{}".format(haircut_test_names))
+                tighter_sigma_prior = prev_validation_df.loc[haircut_mask, "sigma_prior"].values * 0.5
                 logger.info("Reduced sigma priors:{}".format(tighter_sigma_prior))
+                curr_priors_full.loc[haircut_test_names, "sigma_prior"] = tighter_sigma_prior
 
-                curr_priors_full = curr_priors_full.set_index("test_name")
-                curr_priors_full.loc[
-                    tighter_prior_tests, "sigma_prior"
-                ] = tighter_sigma_prior
-                curr_priors_full = curr_priors_full.reset_index()
+            # enforce strictly decreasing sigma; sigma is the minimum of the current or the previous
+            all_test_names = prev_validation_df["test_name"].values
+            prev_sigma_prior = prev_validation_df["sigma"].values
+            curr_sigma_prior = curr_priors_full.loc[all_test_names, "sigma_prior"].values
+            applied_sigma_prior = np.minimum(prev_sigma_prior, curr_sigma_prior)
+            curr_priors_full.loc[all_test_names, "sigma_prior"] = applied_sigma_prior
+            # reset index for proper usage in other stages
+            curr_priors_full = curr_priors_full.reset_index()
 
         curr_priors_unique = (
             curr_priors_full.groupby(by=["test_channel"])[["coef_prior", "sigma_prior"]]
