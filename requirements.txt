@@ -9,7 +9,7 @@ scipy>=1.8.1
 rich
 
 # install orbit from dev
-# orbit-ml @ git+https://github.com/uber/orbit.git@dev-114-cmdstan
+orbit-ml @ git+https://github.com/uber/orbit.git@dev-114-cmdstan
 
 # torch
 # tableone
