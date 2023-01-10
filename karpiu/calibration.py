@@ -3,14 +3,15 @@ import pandas as pd
 from scipy.optimize import fsolve
 from copy import deepcopy
 import logging
-
-from typing import Optional, Dict, Any
+import matplotlib
+import matplotlib.pyplot as plt
+import math
+from typing import Optional, Dict, Any, Tuple
 
 
 from .explainability import Attributor
 from .models import MMM
-from .utils import make_info_logger
-
+from .utils import get_logger
 
 class PriorSolver:
     """Solving Regression Coefficient Prior from MMM by using Attribution logic"""
@@ -36,7 +37,7 @@ class PriorSolver:
             pd.DataFrame: _description_
         """
         if logger is None:
-            logger = make_info_logger(name="karpiu-calibration")
+            self.logger =  get_logger("karpiu-calibration")
 
         input_df = model.raw_df.copy()
         if shuffle:
@@ -126,8 +127,22 @@ def calibrate_model_with_test(
     fit_args: Optional[Dict[str, Any]] = None,
     debug: bool = False,
     logger: Optional[logging.Logger] = None,
-) -> MMM:
-    """Generate a new model based on baseline model with extra priors; This function can be reiterated to generate final calibrated model."""
+) -> Tuple[MMM, pd.DataFrame]:
+    """Generate a new model based on baseline model with extra priors; This function can be reiterated to generate final calibrated model
+
+    Args:
+        prev_model (MMM): _description_
+        tests_df (pd.DataFrame): _description_
+        n_iter (int, optional): _description_. Defaults to 1.
+        seed (Optional[int], optional): _description_. Defaults to None.
+        fit_args (Optional[Dict[str, Any]], optional): _description_. Defaults to None.
+        debug (bool, optional): _description_. Defaults to False.
+        logger (Optional[logging.Logger], optional): _description_. Defaults to None.
+
+    Returns:
+        Tuple[MMM, pd.DataFrame]: new_model: the final calibrated model calibration_report: the dataframe stored the statistics of
+        the calibration process.
+    """
     spend_cols = prev_model.get_spend_cols()
     kpi_col = prev_model.kpi_col
     date_col = prev_model.date_col
@@ -142,7 +157,7 @@ def calibrate_model_with_test(
     validation_dfs_list = list()
 
     if logger is None:
-        logger = make_info_logger("karpiu-calibration")
+        logger = get_logger("karpiu-calibration")
 
     # solve ab-test priors
     ps = PriorSolver(tests_df=tests_df)
@@ -237,6 +252,8 @@ def calibrate_model_with_test(
                 new_model.fit(df, extra_priors=extra_priors_input)
 
             validation_entries_list = list()
+            coef_posteriors_df = new_model.get_regression_summary().set_index("regressor")
+
             for _, row in curr_priors_full.iterrows():
                 test_start = row.loc["test_start"]
                 test_end = row.loc["test_end"]
@@ -269,6 +286,7 @@ def calibrate_model_with_test(
                     "test_end": test_end,
                     "coef_prior": coef_prior,
                     "sigma_prior": sigma_prior,
+                    "coef_posterior": coef_posteriors_df.loc[test_channel, "coef_p50"],
                     "input_cost": test_icac,
                     "input_cost_upper_1se": test_icac + test_se,
                     "input_cost_lower_1se": test_icac - test_se,
@@ -288,4 +306,70 @@ def calibrate_model_with_test(
     if debug:
         pass
     else:
-        return new_model, pd.concat(validation_dfs_list, axis=0, ignore_index=True)
+        calibration_report = pd.concat(validation_dfs_list, axis=0, ignore_index=True)
+        return new_model, calibration_report
+
+
+def make_cost_calibration_plot(report_df: pd.DataFrame) -> matplotlib.axes:
+    """Visualize cost calibration given report dataframe"""
+    test_names = report_df['test_name'].unique().tolist()
+    nrows = math.ceil(len(test_names) / 2)
+    fig, axes = plt.subplots(nrows, 2, figsize=(20, 2 + 3.5 * nrows))
+    axes = axes.flatten()
+    for idx, name in enumerate(test_names):
+        mask = report_df['test_name'] == name
+        x = report_df.loc[mask, 'iteration'].values
+        y_input = report_df.loc[mask, 'input_cost'].values
+        y_solver = report_df.loc[mask, 'solver_cost'].values
+        y_input_upper = report_df.loc[mask, 'input_cost_upper_1se'].values
+        y_input_lower = report_df.loc[mask, 'input_cost_lower_1se'].values
+        axes[idx].set_title(name)
+        axes[idx].plot(x, y_solver, label='solver', color='orange', alpha=0.5)
+        axes[idx].plot(x, y_input, linestyle='--', label='input', color='dodgerblue', alpha=0.5)
+        axes[idx].fill_between(x, y_input_lower, y_input_upper, alpha=0.2, color='dodgerblue')
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles, 
+        labels, 
+        loc='lower center',
+        bbox_to_anchor=(0., 0.05, 1., 1.),
+        fancybox=True,
+        shadow=True, 
+        ncols=2,
+        fontsize=18,
+    )
+    plt.close()
+    return axes
+
+
+def make_coef_calibration_plot(report_df: pd.DataFrame) -> matplotlib.axes:
+    """Visualize coefficients calibration given report dataframe"""
+    test_names = report_df['test_name'].unique().tolist()
+    nrows = math.ceil(len(test_names) / 2)
+    fig, axes = plt.subplots(nrows, 2, figsize=(20, 2 + 3.5 * nrows))
+    axes = axes.flatten()
+    for idx, name in enumerate(test_names):
+        mask = report_df['test_name'] == name
+        x = report_df.loc[mask, 'iteration'].values
+        y_priors = report_df.loc[mask, 'coef_prior'].values
+        y_posteriors = report_df.loc[mask, 'coef_posterior'].values
+        y_priors_upper = y_priors + report_df.loc[mask, 'sigma_prior'].values
+        y_priors_lower = y_priors - report_df.loc[mask, 'sigma_prior'].values
+        axes[idx].set_title(name)
+        axes[idx].plot(x, y_posteriors, label='posteriors', color='orange', alpha=0.5)
+        axes[idx].plot(x, y_priors, linestyle='--', label='priors', color='dodgerblue', alpha=0.5)
+        axes[idx].fill_between(x, y_priors_lower, y_priors_upper, alpha=0.2, color='dodgerblue')
+
+
+    
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles, labels, 
+        loc='lower center',
+        bbox_to_anchor=(0., 0.05, 1., 1.),
+        fancybox=True, shadow=True, ncols=2,
+        fontsize=18,
+    )
+    plt.close()
+    return axes

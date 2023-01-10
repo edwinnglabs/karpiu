@@ -8,10 +8,9 @@ from orbit.models import DLT
 from orbit.utils.features import make_fourier_series_df
 from orbit.utils.params_tuning import grid_search_orbit
 
-from .utils import adstock_process, non_zero_quantile, make_info_logger
+from .utils import adstock_process, non_zero_quantile, get_logger
 
 EVENT_REGRESSOR_SIGMA = 10.0
-
 
 class MMM:
     """The core class of building a MMM
@@ -64,7 +63,7 @@ class MMM:
         """
 
         if logger is None:
-            self.logger = make_info_logger("karpiu-mmm")
+            self.logger =  get_logger("karpiu-mmm")
         else:
             self.logger = logger
 

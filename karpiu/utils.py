@@ -203,3 +203,10 @@ def make_info_logger(name: str, path: Optional[str] = None) -> logging.Logger:
         logger.addHandler(fh)
 
     return logger
+
+
+def get_logger(name: str) -> logging.Logger:
+    logger = logging.getLogger(name=name)
+    if len(logger.handlers) == 0:
+        logger = make_info_logger(name)
+    return logger
