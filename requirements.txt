@@ -7,4 +7,4 @@ arviz>=0.12.1
 matplotlib >=3.5.2
 scipy>=1.8.1
 rich
-orbit-ml>=1.1.4
+orbit-ml>=1.1.4.2
