@@ -27,7 +27,6 @@ class CostCurves:
         multipliers: Optional[Union[np.array, Dict[str, np.array]]] = None,
         min_spend: float = 1.0,
     ):
-
         if spend_df is None:
             self.spend_df = model.raw_df.copy()
         else:
@@ -222,7 +221,6 @@ class CostCurves:
         plot_margin: float = 0.05,
         is_visible: bool = False,
     ) -> None:
-
         n_channels = len(self.channels)
         nrows = math.ceil(n_channels / 2)
 
@@ -325,7 +323,6 @@ class CostCurves:
             handles, labels = axes[-1].get_legend_handles_labels()
 
         elif self.curve_type == "overall":
-
             # single cost curve
             fig, ax = plt.subplots(1, 1, figsize=(18, 12))
             temp_cc = self.cost_curves[self.cost_curves["ch"] == "overall"].reset_index(

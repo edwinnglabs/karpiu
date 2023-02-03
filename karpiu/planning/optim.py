@@ -187,7 +187,6 @@ class BudgetOptimizer:
         eps: float = 1e-03,
         ftol: float = 1e-07,
     ) -> None:
-
         if init is None:
             x0 = self.init_spend_matrix.flatten() / self.spend_scaler
         else:

@@ -399,7 +399,6 @@ class MMM:
         stan_mcmc_args: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> None:
-
         self.logger.info("Fit final model.")
 
         if self.saturation_df is None:
@@ -704,7 +703,6 @@ class MMM:
         self,
         regressors: Optional[List[str]] = None,
     ) -> np.array:
-
         coef_df = self._model.get_regression_coefs()
         coef_df = coef_df.set_index("regressor")
         if regressors is not None:

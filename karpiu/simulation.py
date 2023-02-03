@@ -196,7 +196,6 @@ def make_mmm_daily_data(
     start_date: str = "2019-01-01",
     adstock_args: Optional[Dict[str, np.array]] = None,
 ) -> pd.DataFrame:
-
     # these loc and scale parameters are chosen to mimic realistic daily data
     n_max_adstock = 0
     adstock_df = None

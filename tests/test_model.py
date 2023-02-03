@@ -30,7 +30,6 @@ from orbit.diagnostics.metrics import smape
     ids=["with_adstock", "no_adstock"],
 )
 def test_mmm_fit_predict(seed, adstock_args):
-
     # data_args
     n_steps = 365 * 3
     coefs = [0.03, 0.05, 0.028, 0.01, 0.03]
