@@ -142,9 +142,12 @@ class CostCurves:
             raise Exception("Invalid {} curve type input.".format(self.curve_type))
         return multipliers
 
-    def generate_cost_curves(self, multipliers=None) -> pd.DataFrame:
+    def generate_cost_curves(self, multipliers: Optional[Union[List[float], Dict[str, float]]]=None) -> pd.DataFrame:
         if multipliers is None:
             multipliers = self.get_multipliers()
+            
+        if not (isinstance(multipliers, dict) or isinstance(multipliers, list)):
+            raise Exception("Invalid multipliers type -- must be in Dict or List type.")
 
         # output
         cost_curves_dict = {

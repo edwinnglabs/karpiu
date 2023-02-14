@@ -171,6 +171,15 @@ class MMM:
         # exclude spend cols in the extra features screening
         regressor_cols = self.full_event_cols + self.full_control_feat_cols
 
+        # in case we already select the best params
+        kwargs.update(self.best_params)
+        if "level_sm_input" not in kwargs:
+             kwargs["level_sm_input"] = 0.001
+        else:
+            self.logger.info("Using best params level smoothing input(={}) instead of default (=0.001).").format(
+                kwargs["level_sm_input"]
+            )
+
         temp_dlt = DLT(
             # seasonality=7,
             response_col=self.kpi_col,
@@ -180,14 +189,14 @@ class MMM:
             # uses mcmc for high dimensional features selection
             estimator="stan-mcmc",
             # a safe setting for fast regression; will estimate this in final model
-            level_sm_input=0.001,
+            # level_sm_input=0.001,
             # slope_sm_input=0.01,
             num_warmup=num_warmup,
             num_sample=num_sample,
             chains=chains,
             # use small sigma for global trend as this is a long-term daily model
             global_trend_sigma_prior=0.001,
-            **self.best_params,
+            # **self.best_params,
             **kwargs,
         )
         temp_dlt.fit(transform_df)
@@ -256,7 +265,6 @@ class MMM:
                 "level_sm_input": list(1 - np.linspace(0.9755, 0.9962, 5)),
                 "damped_factor": list(np.linspace(0.9057, 0.9923, 3)),
             }
-
         regressors = self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         dlt_proto = DLT(
             # seasonality=7,
@@ -288,7 +296,7 @@ class MMM:
         # you might end up multiple params; just pick the first set
         best_params = best_params[0]
         self.best_params.update(best_params)
-        self.tuning_df = tuning_df
+        self.tuning_df = deepcopy(tuning_df)
 
         for k, v in self.best_params.items():
             self.logger.info("Best params {} set as {:.5f}".format(k, v))
