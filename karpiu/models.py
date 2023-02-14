@@ -174,11 +174,11 @@ class MMM:
         # in case we already select the best params
         kwargs.update(self.best_params)
         if "level_sm_input" not in kwargs:
-             kwargs["level_sm_input"] = 0.001
+            kwargs["level_sm_input"] = 0.001
         else:
-            self.logger.info("Using best params level smoothing input(={}) instead of default (=0.001).").format(
-                kwargs["level_sm_input"]
-            )
+            self.logger.info(
+                "Using best params level smoothing input(={}) instead of default (=0.001)."
+            ).format(kwargs["level_sm_input"])
 
         temp_dlt = DLT(
             # seasonality=7,
