@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from copy import deepcopy
-from typing import Optional, List, Union, Dict
+from typing import Optional, List, Union, Dict, Tuple
 
 from .utils import adstock_process
 
@@ -195,7 +195,7 @@ def make_mmm_daily_data(
     seed: int = 2022,
     start_date: str = "2019-01-01",
     adstock_args: Optional[Dict[str, np.array]] = None,
-) -> pd.DataFrame:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     # these loc and scale parameters are chosen to mimic realistic daily data
     n_max_adstock = 0
     adstock_df = None
