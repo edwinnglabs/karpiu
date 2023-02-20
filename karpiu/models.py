@@ -313,6 +313,22 @@ class MMM:
         q: Optional[float] = 0.1,
         scalability_df: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
+        """A function used to derivation saturation constant based quantiles with a scalability dataframe
+
+        Args:
+            df (pd.DataFrame): spend data from input dataframe
+            q (Optional[float], optional): quantile used to set saturation. Defaults to 0.1.
+            scalability_df (Optional[pd.DataFrame], optional): extra information of the scalability which should 
+            contain two columns: ["regressor", "scalability"]. Defaults to None which means all scalability to 
+            be set as one. The final saturation constant will be the derived quantiles times scalability scalar.
+
+        Raises:
+            Exception: _description_
+            Exception: _description_
+
+        Returns:
+            pd.DataFrame: saturation df
+        """
         self.logger.info("Deriving saturation constants...")
         # rebuild a base every time it fits data
         self.saturation_df = (
