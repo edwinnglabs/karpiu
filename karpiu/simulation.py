@@ -178,9 +178,11 @@ def make_mmm_daily_data(
     adstock_args: Optional[Dict[str, np.array]] = None,
     start_date: str = "2019-01-01",
     country: str = "US",
+    with_yearly_seasonality: bool = False,
+    with_weekly_seasonality: bool = False,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, List[str]]:
     """The wrapper function to generate final dataset sample for MMM including the core data frame,
-    the scalabity and saturation dataframe and the adstock dataframe
+    the scalability and saturation dataframe and the adstock dataframe
 
     Args:
         coefs (Union[List[float], np.array]): _description_
@@ -206,7 +208,10 @@ def make_mmm_daily_data(
     n_steps += n_max_adstock
 
     # create the base df
-    start_date_real = pd.to_datetime(start_date) + pd.to_timedelta(n_max_adstock, unit="D")
+    # extend with earlier days due to adstock
+    start_date_real = pd.to_datetime(start_date) - pd.to_timedelta(
+        n_max_adstock, unit="D"
+    )
     dt_array = pd.date_range(start=start_date_real, periods=n_steps)
     df = pd.DataFrame(dt_array, columns=["date"])
     if country is not None:
@@ -215,12 +220,20 @@ def make_mmm_daily_data(
         event_cols = list()
 
     levs = make_trend(n_steps=n_steps, rw_loc=0.001, rw_scale=0.01)
-    yearly_seas = make_seasonality(
-        order=3, scale=0.1, n_steps=n_steps, seasonality=365.25
-    )
-    weekly_seas = make_seasonality(
-        order=2, scale=0.02, n_steps=n_steps, seasonality=7
-    )
+
+    if with_yearly_seasonality:
+        yearly_seas = make_seasonality(
+            order=3, scale=0.1, n_steps=n_steps, seasonality=365.25
+        )
+    else:
+        yearly_seas = np.zeros(n_steps)
+
+    if with_weekly_seasonality:
+        weekly_seas = make_seasonality(
+            order=2, scale=0.02, n_steps=n_steps, seasonality=7
+        )
+    else:
+        weekly_seas = np.zeros(n_steps)
 
     # spend features
     # (n_steps, n_regressors)
@@ -229,35 +242,30 @@ def make_mmm_daily_data(
     )
     # cut features for positivity
     channel_features = np.ceil(np.clip(channel_features, a_min=0, a_max=np.inf))
-    channel_feat_med =  np.median(channel_features, axis=0)
-    channel_transformed_features = np.log(
-        1 + channel_features / 
-       channel_feat_med
-    )
+    channel_feat_med = np.median(channel_features, axis=0)
+    channel_transformed_features = np.log(1 + channel_features / channel_feat_med)
     if isinstance(channels_coef, list):
         channels_coef = np.array(channels_coef)
 
     if event_cols:
         # (n_steps, n_regressors)
         events_features = df[event_cols].values
-        events_coef = np.random.normal(loc=.0, scale=0.33, size=len(event_cols))
+        events_coef = np.random.normal(loc=0.0, scale=0.33, size=len(event_cols))
         coefs = np.concatenate([channels_coef, events_coef], axis=-1)
     else:
         coefs = channels_coef
 
-    # adstock treatment
+    # adstock treatment and create adstock df
     if adstock_args is not None:
         adstock_steps = adstock_args["n_steps"]
         n_max_adstock = adstock_steps - 1
         adstock_matrix = make_adstock_matrix(**adstock_args)
         channel_transformed_features = adstock_process(
-            channel_transformed_features, 
-            adstock_matrix=adstock_matrix
+            channel_transformed_features, adstock_matrix=adstock_matrix
         )
         columns = ["d_{}".format(x) for x in range(adstock_steps)]
-        adstock_df = pd.DataFrame(
-            adstock_matrix, columns=columns, index=channels
-        ).index.rename("regressor", inplace=True)
+        adstock_df = pd.DataFrame(adstock_matrix, columns=columns, index=channels)
+        adstock_df.index.rename("regressor", inplace=True)
 
         # remove first n_max_adstock observations
         if event_cols:
@@ -268,14 +276,17 @@ def make_mmm_daily_data(
         yearly_seas = yearly_seas[n_max_adstock:]
         channel_features = channel_features[n_max_adstock:]
         dt_array = dt_array[n_max_adstock:]
-        df = df.loc[n_max_adstock: , :].reset_index(drop=True)
+        df = df.loc[n_max_adstock:, :].reset_index(drop=True)
 
     # make regression component
     if event_cols:
-        reg_covariates = np.concatenate([
-            channel_transformed_features, 
-            events_features,
-        ], axis=-1)
+        reg_covariates = np.concatenate(
+            [
+                channel_transformed_features,
+                events_features,
+            ],
+            axis=-1,
+        )
     else:
         reg_covariates = channel_transformed_features
     channels_df = pd.DataFrame(data=channel_features, columns=channels)
@@ -284,7 +295,7 @@ def make_mmm_daily_data(
     reg_comp = make_regression(reg_covariates, coefs=coefs, bias=6.4, noise_scale=0.25)
     # latent response
     y = levs + weekly_seas + yearly_seas + reg_comp
-    
+
     # turns to elasticity model with log-log transformation
     df["sales"] = np.ceil(np.exp(y))
     df = pd.concat([df, channels_df], axis=1)

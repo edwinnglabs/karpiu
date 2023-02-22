@@ -318,8 +318,8 @@ class MMM:
         Args:
             df (pd.DataFrame): spend data from input dataframe
             q (Optional[float], optional): quantile used to set saturation. Defaults to 0.1.
-            scalability_df (Optional[pd.DataFrame], optional): extra information of the scalability which should 
-            contain two columns: ["regressor", "scalability"]. Defaults to None which means all scalability to 
+            scalability_df (Optional[pd.DataFrame], optional): extra information of the scalability which should
+            contain two columns: ["regressor", "scalability"]. Defaults to None which means all scalability to
             be set as one. The final saturation constant will be the derived quantiles times scalability scalar.
 
         Raises:

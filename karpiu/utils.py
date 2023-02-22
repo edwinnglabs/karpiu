@@ -90,7 +90,7 @@ def np_shift(x, k):
     return out
 
 
-def insert_events(df: pd.DataFrame, date_col : str, country : str):
+def insert_events(df: pd.DataFrame, date_col: str, country: str):
     """
     Returns
     -------
@@ -104,6 +104,7 @@ def insert_events(df: pd.DataFrame, date_col : str, country : str):
     events_dict = {}
 
     for yr in yrs:
+        # us_holidays = holidays.US(years=yr)
         us_holidays = holidays.country_holidays(country, years=yr)
         for dt, name in sorted(us_holidays.items()):
             # clean up the tag for machine-readable format

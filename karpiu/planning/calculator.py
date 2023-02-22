@@ -460,30 +460,32 @@ def calculate_marginal_cost(
     # base_comp = trend + seas
     base_comp = trend
 
+    # TODO: this block looks similar to some part of the Attributor; investigate whether we can
+    # TODO: refactor this
     # background regressors
-    bg_regressors = list(
+    bkg_regressors = list(
         set(full_regressors)
         - set(channels)
         - set(event_regressors)
         - set(control_regressors)
     )
 
-    if len(bg_regressors) > 0:
+    if len(bkg_regressors) > 0:
         # (n_regressors, )
-        bg_coef_array = model.get_coef_vector(regressors=bg_regressors)
+        bkg_coef_array = model.get_coef_vector(regressors=bkg_regressors)
         # (n_regressors, )
-        bg_sat_array = sat_df.loc[bg_regressors, "saturation"].values
+        bkg_sat_array = sat_df.loc[bkg_regressors, "saturation"].values
         # (calc_steps, n_regressors)
-        bg_regressor_matrix = df.loc[calc_mask, bg_regressors].values
-        bg_adstock_filter_matrix = model.get_adstock_matrix(bg_regressors)
+        bkg_regressor_matrix = df.loc[calc_mask, bkg_regressors].values
+        bkg_adstock_filter_matrix = model.get_adstock_matrix(bkg_regressors)
         # (mea_steps, n_regressors)
-        bg_adstock_regressor_matrix = adstock_process(
-            bg_regressor_matrix,
-            bg_adstock_filter_matrix,
+        bkg_adstock_regressor_matrix = adstock_process(
+            bkg_regressor_matrix,
+            bkg_adstock_filter_matrix,
         )
 
         base_comp += np.sum(
-            bg_coef_array * np.log1p(bg_adstock_regressor_matrix / bg_sat_array),
+            bkg_coef_array * np.log1p(bkg_adstock_regressor_matrix / bkg_sat_array),
             -1,
         )
 
