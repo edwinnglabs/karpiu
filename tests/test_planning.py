@@ -173,7 +173,6 @@ def test_target_maximizer():
 
     cv = np.nanstd(post_mc) / np.nanmean(post_mc)
     assert np.all(cv < 0.1)
-    print(opt_report.head(5))
 
     # check2: total predicted response must be higher than current
     optim_pred = mmm.predict(optim_spend_df)
