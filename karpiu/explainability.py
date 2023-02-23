@@ -40,11 +40,44 @@ class Attributor:
 
         Args:
             model:
+            attr_regressors: the regressors required attribution; if None, use model.get_spend_cols()
             start: attribution start date string; if None, use minimum start date based on model provided
             end: attribution end date string; if None, use maximum end date based on model provided
             df: data frame; if None, use original data based on model provided
             kpi_name: kpi label; if None, use information from model provided
             verbose: whether to print process information
+
+
+        Attributes:
+            date_col: date column of the core dataframe
+            verbose: control verbose
+            max_adstock: number of adstock delay i.e. max_adstock = adstock steps - 1 and max_adstock = 0
+            if no adstock exists in the model
+            full_regressors: all regressors except internal seasonal regressors
+            bkg_regressors: the background regressors not included in the required attribution regressors
+            , events and control features. it is used as the starting point to pre-calculate base component
+            for fast attribution process. Note that in general it includes non-attribution spend
+            and seasonal regressors.
+            event_regressors: event regressors
+            control_regressors: control regressors
+            attr_start: attribution start date see inputs.
+            attr_end: attribution end date. see inputs.
+            kpi_col: response column of the core data frame
+            attr_regressors: the regressors required attribution; if None, use model.get_spend_cols()
+            calc_start: the full expanded range of date range used for calculation i.e. extending with
+            max_adstock days upfront
+            calc_end: the full expanded range of date range used for calculation i.e. extending with
+            max_adstock days after attr_end
+            df_bau: the snapshot of the input data frame within the [calc_start, calc_end] range with
+            trimmed columns which are necessary for attribution process
+            dt_array: date array of df_bau
+            attr_adstock_matrix: the adstock matrix with same alignment of attr_regressors
+            attr_regressor_matrix: the regressor matrix extracted from df_bau
+            attr_sat_array: saturation array of attr_regressors
+            attr_adstock_regressor_matrix: adstock transformed matrix from attr_regressor_matrix with
+            zeros padded upfront to account lose of adstock(=max_adstock) steps
+            attr_coef_matrix: the attribution regressor coefficients extracted from the model
+            pred_zero: prediction when all attributing regressor are turned off
         """
 
         self.date_col = model.date_col
@@ -55,12 +88,8 @@ class Attributor:
         # it excludes the fourier-series columns
         self.full_regressors = model.get_regressors()
         # FIXME: right now it DOES NOT work with including control features;
-        # FIXME: right now it may not support fourier series seasonal regressors
         self.event_regressors = model.get_event_cols()
         self.control_regressors = model.get_control_feat_cols()
-
-        # FIXME: keep model object for debug only
-        self.model = deepcopy(model)
 
         if df is None:
             df = model.raw_df.copy()
@@ -68,12 +97,16 @@ class Attributor:
             df = df.copy()
 
         if start is None:
-            self.attr_start = pd.to_datetime(df[self.date_col].values[0])
+            self.attr_start = pd.to_datetime(
+                df[self.date_col].values[0]
+            ) + pd.Timedelta(days=self.max_adstock)
         else:
             self.attr_start = pd.to_datetime(start)
 
         if end is None:
-            self.attr_end = pd.to_datetime(df[self.date_col].values[-1])
+            self.attr_end = pd.to_datetime(df[self.date_col].values[-1]) - pd.Timedelta(
+                days=self.max_adstock
+            )
         else:
             self.attr_end = pd.to_datetime(end)
 
@@ -189,39 +222,33 @@ class Attributor:
         # base_comp = trend + seas
         base_comp = trend
 
-        self.non_attr_regressors = list(
+        self.bkg_regressors = list(
             set(self.full_regressors)
             - set(self.attr_regressors)
             - set(self.event_regressors)
             - set(self.control_regressors)
         )
-        if len(self.non_attr_regressors) > 0:
-            non_attr_coef_matrix = model.get_coef_matrix(
+        if len(self.bkg_regressors) > 0:
+            bkg_coef_matrix = model.get_coef_matrix(
                 date_array=self.dt_array,
-                regressors=self.non_attr_regressors,
+                regressors=self.bkg_regressors,
             )
-            non_attr_sat_array = sat_df.loc[
-                self.non_attr_regressors, "saturation"
-            ].values
-            non_attr_regressor_matrix = self.df_bau.loc[
-                :, self.non_attr_regressors
-            ].values
-            non_attr_adstock_matrix = model.get_adstock_matrix(self.non_attr_regressors)
-            non_attr_adstock_regressor_matrix = adstock_process(
-                non_attr_regressor_matrix, non_attr_adstock_matrix
+            bkg_sat_array = sat_df.loc[self.bkg_regressors, "saturation"].values
+            bkg_regressor_matrix = self.df_bau.loc[:, self.bkg_regressors].values
+            bkg_adstock_matrix = model.get_adstock_matrix(self.bkg_regressors)
+            bkg_adstock_regressor_matrix = adstock_process(
+                bkg_regressor_matrix, bkg_adstock_matrix
             )
-            non_attr_adstock_regressor_matrix = np.concatenate(
+            bkg_adstock_regressor_matrix = np.concatenate(
                 (
-                    np.zeros(
-                        (self.max_adstock, non_attr_adstock_regressor_matrix.shape[1])
-                    ),
-                    non_attr_adstock_regressor_matrix,
+                    np.zeros((self.max_adstock, bkg_adstock_regressor_matrix.shape[1])),
+                    bkg_adstock_regressor_matrix,
                 ),
                 0,
             )
             base_comp += np.sum(
-                non_attr_coef_matrix
-                * np.log1p(non_attr_adstock_regressor_matrix / non_attr_sat_array),
+                bkg_coef_matrix
+                * np.log1p(bkg_adstock_regressor_matrix / bkg_sat_array),
                 -1,
             )
 
@@ -265,7 +292,6 @@ class Attributor:
         # get the number of lags in adstock expressed as days
         date_col = self.date_col
         df_bau = self.df_bau.copy()
-        kpi_col = self.kpi_col
 
         # (n_steps, n_attr_regressors)
         attr_coef_matrix = self.attr_coef_matrix.copy()
@@ -293,7 +319,7 @@ class Attributor:
         self.pred_bau = np.exp(self.base_comp + varying_comp)
 
         if true_up:
-            true_up_array = self.df_bau[kpi_col].values
+            true_up_array = self.df_bau[self.kpi_col].values
         else:
             true_up_array = self.pred_bau
 
@@ -358,7 +384,7 @@ def make_attribution_numpy(
     Parameters
     ----------
     coef_matrix: array in shape (n_steps, n_regressors)
-    regressor_matrix: array in shape (n_stepsk, n_regressors)
+    regressor_matrix: array in shape (n_steps, n_regressors)
     adstock_regressor_matrix: array in shape (n_steps, n_regressors)
     pred_bau:  (n_steps, )
     pred_zero: (n_step, )

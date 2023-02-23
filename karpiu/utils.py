@@ -90,7 +90,7 @@ def np_shift(x, k):
     return out
 
 
-def insert_events(df, date_col, country):
+def insert_events(df: pd.DataFrame, date_col: str, country: str):
     """
     Returns
     -------

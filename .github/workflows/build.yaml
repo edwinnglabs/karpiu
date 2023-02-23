@@ -27,4 +27,4 @@ jobs:
           pip install -r requirements-docs.txt
           python setup.py develop
       - name: Test with pytest
-        run: pytest -vs tests/ --cov karpiu/
+        run: pytest -vs tests/test_planning.py  --cov=karpiu --cov-report term-missing

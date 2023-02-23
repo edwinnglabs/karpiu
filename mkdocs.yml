@@ -3,10 +3,12 @@ site_url: https://edwinng.com/karpiu/
 
 nav:
   - Home: index.md
-  - Examples: 
-    - Quickstart: ./examples/quickstart.ipynb
+  - Quickstart: ./examples/quickstart.ipynb
+  - More Examples:
+    - Seasonality and Events: ./examples/seasonality_and_events.ipynb
     - Attribution: ./examples/attribution.ipynb
-    - Optimization: ./examples/optimization.ipynb
+  - Optimization:
+    - Target Maximization: ./examples/optimization.ipynb
 
 plugins:
   - mkdocs-jupyter

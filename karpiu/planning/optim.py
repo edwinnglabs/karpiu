@@ -15,9 +15,9 @@ from ..utils import adstock_process
 # add more issues e.g.
 # 1. add individual budget constraints [done]
 # 2. add tutorials and demo [done]
-# 3. add attribution tutorials
+# 3. add attribution tutorials [done]
 # 4. add better auto doc workflow [done]
-# 5. add unit test of attribution
+# 5. add unit test of attribution [done]
 # 6. add unit test of optimization
 
 

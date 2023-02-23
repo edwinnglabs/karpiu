@@ -10,8 +10,6 @@ from orbit.utils.params_tuning import grid_search_orbit
 
 from .utils import adstock_process, non_zero_quantile, get_logger
 
-EVENT_REGRESSOR_SIGMA = 10.0
-
 
 class MMM:
     """The core class of building a MMM
@@ -44,6 +42,7 @@ class MMM:
         # scalability_df: Optional[pd.DataFrame] = None,
         control_feat_cols: Optional[List[str]] = None,
         event_cols: Optional[List[str]] = None,
+        events_sigma_prior: float = 0.3,
         seasonality: Optional[List[int]] = None,
         fs_orders: Optional[List[int]] = None,
         total_market_sigma_prior: float = None,
@@ -93,6 +92,7 @@ class MMM:
 
         # initialize as full columns
         self.event_cols = deepcopy(self.full_event_cols)
+        self.events_sigma_prior = events_sigma_prior
         self.control_feat_cols = deepcopy(self.full_control_feat_cols)
 
         # complex seasonality
@@ -184,7 +184,7 @@ class MMM:
             # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=regressor_cols,
-            regressor_sigma_prior=[EVENT_REGRESSOR_SIGMA] * len(regressor_cols),
+            regressor_sigma_prior=[self.events_sigma_prior] * len(regressor_cols),
             date_col=self.date_col,
             # uses mcmc for high dimensional features selection
             estimator="stan-mcmc",
@@ -272,7 +272,7 @@ class MMM:
             regressor_col=regressors,
             # only include events and seasonality in hyper-params screening
             regressor_sign=["="] * len(regressors),
-            regressor_sigma_prior=[EVENT_REGRESSOR_SIGMA] * len(regressors),
+            regressor_sigma_prior=[self.events_sigma_prior] * len(regressors),
             date_col=self.date_col,
             # 4 weeks
             forecast_horizon=28,
@@ -313,6 +313,22 @@ class MMM:
         q: Optional[float] = 0.1,
         scalability_df: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
+        """A function used to derivation saturation constant based quantiles with a scalability dataframe
+
+        Args:
+            df (pd.DataFrame): spend data from input dataframe
+            q (Optional[float], optional): quantile used to set saturation. Defaults to 0.1.
+            scalability_df (Optional[pd.DataFrame], optional): extra information of the scalability which should
+            contain two columns: ["regressor", "scalability"]. Defaults to None which means all scalability to
+            be set as one. The final saturation constant will be the derived quantiles times scalability scalar.
+
+        Raises:
+            Exception: _description_
+            Exception: _description_
+
+        Returns:
+            pd.DataFrame: saturation df
+        """
         self.logger.info("Deriving saturation constants...")
         # rebuild a base every time it fits data
         self.saturation_df = (
@@ -433,7 +449,7 @@ class MMM:
         reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
         reg_scheme["regressor_sigma_prior"] = [self.default_spend_sigma_prior] * len(
             self.spend_cols
-        ) + [EVENT_REGRESSOR_SIGMA] * len(
+        ) + [self.events_sigma_prior] * len(
             self.fs_cols_flatten + self.event_cols + self.control_feat_cols
         )
         reg_scheme = reg_scheme.set_index("regressor")
@@ -499,7 +515,7 @@ class MMM:
                 self.total_market_sigma_prior * reg_coefs / np.sum(reg_coefs)
             )
             reg_scheme["regressor_sigma_prior"] = spend_sigma_prior + [
-                EVENT_REGRESSOR_SIGMA
+                self.events_sigma_prior
             ] * len(self.fs_cols_flatten + self.event_cols + self.control_feat_cols)
 
             if self.extra_priors is not None:
