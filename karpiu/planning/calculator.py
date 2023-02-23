@@ -11,6 +11,7 @@ logger = logging.getLogger("karpiu-planning")
 
 from ..models import MMM
 from ..utils import adstock_process
+from ..explainability import Attributor
 
 
 class CostCurves:
@@ -224,7 +225,7 @@ class CostCurves:
         outcome_scaler: float = 1e3,
         optim_cost_curves: Optional[pd.DataFrame] = None,
         plot_margin: float = 0.05,
-        is_visible: bool = False,
+        is_visible: bool = True,
     ) -> None:
         n_channels = len(self.channels)
         nrows = math.ceil(n_channels / 2)
@@ -540,3 +541,93 @@ def calculate_marginal_cost(
             "marginal_cost": marginal_cost,
         }
     ).set_index("regressor")
+
+
+def generate_cost_report(
+    model: MMM,
+    channels: List[str],
+    start: str,
+    end: str,
+    pre_spend_df: pd.DataFrame,
+    post_spend_df: pd.DataFrame,
+    spend_scaler: float = 1e3,
+):
+    """A wrapper function combining calculation of average and marginal cost in pre and post optimization"""
+    # report average and marginal cost
+    # pre-opt result
+    attr_obj = Attributor(model, attr_regressors=channels, start=start, end=end)
+    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution()
+    tot_attr_df = spend_attr_df[channels].apply(np.sum, axis=0)
+    tot_spend_df = spend_df[channels].apply(np.sum, axis=0)
+    avg_cost_df = tot_spend_df / tot_attr_df
+    avg_cost_df = pd.DataFrame(avg_cost_df)
+    avg_cost_df.index = avg_cost_df.index.rename("regressor")
+    avg_cost_df = avg_cost_df.rename(columns={0: "avg_cost"})
+
+    tot_spend_df = tot_spend_df / spend_scaler
+    tot_spend_df = pd.DataFrame(tot_spend_df)
+    tot_spend_df.index = tot_spend_df.index.rename("regressor")
+    tot_spend_df = tot_spend_df.rename(columns={0: "pre_opt_spend"})
+
+    mc_df = calculate_marginal_cost(
+        model,
+        spend_df=pre_spend_df,
+        channels=channels,
+        spend_start=start,
+        spend_end=end,
+    )
+
+    pre_opt_report = pd.concat(
+        [avg_cost_df, mc_df, tot_spend_df], axis=1, keys="regressor"
+    )
+    pre_opt_report.columns = [
+        "pre-opt-avg-cost",
+        "pre-opt-marginal-cost",
+        "pre-opt-spend",
+    ]
+
+    # post-opt result
+    attr_obj = Attributor(
+        model, df=post_spend_df, attr_regressors=channels, start=start, end=end
+    )
+    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution()
+    optim_tot_attr_df = spend_attr_df[channels].apply(np.sum, axis=0)
+    optim_tot_spend_df = spend_df[channels].apply(np.sum, axis=0)
+    post_avg_cost_df = optim_tot_spend_df / optim_tot_attr_df
+    post_avg_cost_df = pd.DataFrame(post_avg_cost_df)
+    post_avg_cost_df = post_avg_cost_df.rename(columns={0: "post-opt-avg-cost"})
+
+    optim_tot_spend_df = optim_tot_spend_df / spend_scaler
+    optim_tot_spend_df = pd.DataFrame(optim_tot_spend_df)
+    optim_tot_spend_df.index = optim_tot_spend_df.index.rename("regressor")
+    optim_tot_spend_df = optim_tot_spend_df.rename(columns={0: "post-opt-spend"})
+
+    post_mc_df = calculate_marginal_cost(
+        model,
+        spend_df=post_spend_df,
+        channels=channels,
+        spend_start=start,
+        spend_end=end,
+    )
+
+    post_opt_report = pd.concat(
+        [post_avg_cost_df, post_mc_df, optim_tot_spend_df], axis=1
+    )
+    post_opt_report.columns = [
+        "post-opt-avg-cost",
+        "post-opt-marginal-cost",
+        "post-opt-spend",
+    ]
+
+    report = pd.concat([pre_opt_report, post_opt_report], axis=1)
+    report = report[
+        [
+            "pre-opt-avg-cost",
+            "post-opt-avg-cost",
+            "pre-opt-marginal-cost",
+            "post-opt-marginal-cost",
+            "pre-opt-spend",
+            "post-opt-spend",
+        ]
+    ]
+    return report
