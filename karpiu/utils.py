@@ -25,29 +25,43 @@ def adstock_process(
     adstock_matrix: np.array,
 ):
     """Perform 1-D convolution given data matrix and adstock filter matrix
-    regressor_matrix: 2-D array like with shape (n_steps, n_regressors)
+    regressor_matrix: #-D or 2-D array like with shape (batch_size, n_steps, n_regressors) or (n_steps, n_regressors)
     adstock_matrix: 2-D array like with shape (n_regressors, n_adstock_weights)
     """
+
+    # filters formation with shape (n_regressors, 1, n_adstock_weights)
+    # the middle dim is 1 as it is correspondent to the elements per group
+    # since we have n_regressors groups which acts parallelly on different channel, 
+    # middle dim = n_res_dim / n_regressors 
     # flipping to align with time and convert to torch
     adstock_filters = torch.from_numpy(np.flip(adstock_matrix, 1).copy())
     # middle shape = channels/group = 1
+    # (n_regressors, 1, n_steps)
     adstock_filters = adstock_filters.unsqueeze(1)
 
-    # torch.conv requires 3-dimension
-    x = torch.from_numpy(regressor_matrix).transpose(1, 0).unsqueeze(0)
+    # x formation
+    # (batches, n_regressor, n_steps)
+    x = torch.from_numpy(regressor_matrix).transpose(-2, -1)
+    if len(x.shape) == 2:
+        x = x.unsqueeze(0)
 
     assert (
-        adstock_filters.shape[0] == x.shape[1]
+        adstock_filters.shape[0] == x.shape[-2]
     ), "adstock channels does not match with input channels"
 
+    # (n_batches, n_regressors, n_steps - n_adstock_weights)
     adstocked_values = (
         F.conv1d(
             x,
             adstock_filters,
-            groups=adstock_matrix.shape[0],
+            groups=adstock_filters.shape[0],
         )
+    )
+    # (n_batches, n_steps - n_adstock_weights, n_regressors)
+    adstocked_values = (
+        adstocked_values
+        .transpose(-2, -1)
         .squeeze(0)
-        .transpose(1, 0)
     )
     return adstocked_values.detach().numpy()
 

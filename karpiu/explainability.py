@@ -5,7 +5,71 @@ from typing import Optional, Tuple, List
 
 from .utils import adstock_process, np_shift
 from .models import MMM
+from .model_shell import MMMShell
 
+class FastAttributor(MMMShell):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def make_attribution(self, true_up: bool = True):
+        n_regressors = len(self.target_regressors)
+        zero_paddings = np.zeros((self.max_adstock, n_regressors))
+        # (n_calc_steps, n_regressors)
+        simulated_regressors_matrix = np.concatenate(
+            [zero_paddings, self.target_regressors_matrix, zero_paddings], 
+            axis=0
+        )
+
+        # (n_regressors + 1,, n_calc_steps, n_regressors)
+        simulated_regressors_matrix = np.tile(
+            np.expand_dims(simulated_regressors_matrix, 0),
+            reps=(n_regressors + 1, 1, 1)
+        ) * self.design_matrix
+        # (n_regressors + 1, n_calc_steps, n_regressors)
+        simulated_regressors_matrix += self.target_regressor_bkg_matrix
+
+        # take resulting regressors into adstock process
+        # (n_regressor + 1, n_result_steps, n_regressor)
+        simulated_regressors_matrix = adstock_process(
+            simulated_regressors_matrix,
+            self.target_adstock_matrix,
+        )
+
+        # one-off regression comp
+        # (n_regressors, n_result_steps)
+        one_off_reg_comp = np.sum(self.target_coef_matrix * np.log1p(
+            simulated_regressors_matrix[1:, ...] / self.target_sat_array
+        ), -1)
+        # (n_result_steps, )
+        full_reg_comp = np.sum(self.target_coef_matrix * np.log1p(
+            simulated_regressors_matrix[0] / self.target_sat_array
+        ), -1)
+
+        # un-normalized attribution
+        # (n_regressors, n_result_steps)
+        attr_matrix = self.pred_zero * (
+            -np.exp(one_off_reg_comp) + np.exp(full_reg_comp)
+        )
+        # insert the first row for organic / non-target regressors attribution lump sum
+        attr_matrix = np.concatenate(
+            [
+                np.expand_dims(self.pred_zero, 0),
+                attr_matrix,
+            ]
+        )
+
+        if true_up:
+            true_up_arr = self.df.loc[self.result_mask, self.kpi_col].values
+        else:
+            true_up_arr = self.pred_zero * np.exp(full_reg_comp)
+        
+        # linearization to make decomp additive
+        # (n_regressors, n_result_steps, )
+        norm_attr_matrix = attr_matrix / np.sum(attr_matrix, 0, keepdims=True) * true_up_arr
+        # since they are not decomposable in spend x time dimension
+        # aggregate them into regressors level
+        # agg_attr = np.sum(norm_attr_matrix, -1)
+        return norm_attr_matrix
 
 class Attributor:
     """The class to make attribution on a state-space model in an object-oriented way; Algorithm assumes model is
@@ -154,10 +218,12 @@ class Attributor:
                     df[date_col].iloc[-1], self.calc_end, self.max_adstock
                 )
             )
+
         # set a business-as-usual case data frame
+        calc_mask = (df[date_col] >= self.calc_start) & (df[date_col] <= self.calc_end)
         self.df_bau = df.loc[
-            (df[date_col] >= self.calc_start) & (df[date_col] <= self.calc_end),
-            [date_col, self.kpi_col] + self.full_regressors,
+            calc_mask, 
+            [date_col, self.kpi_col] + self.full_regressors
         ].reset_index(drop=True)
         self.dt_array = self.df_bau[date_col].values
 
@@ -211,66 +277,74 @@ class Attributor:
         # prediction with all attr regressors turned to zero
         # (n_steps, )
         zero_pred_df = model.predict(df=df_zero, decompose=True)
-        # log scale
-        trend = zero_pred_df["trend"].values
+
+        # trend = zero_pred_df["trend"].values
         # seas = zero_pred_df['weekly seasonality'].values
         # original scale
         self.pred_zero = zero_pred_df["prediction"].values
+        # log scale
+        self.base_comp = np.log(self.pred_zero)
         # dependent on the coefficients (can be specified by users in next step)
         self.pred_bau = None
 
-        # base_comp = trend + seas
-        base_comp = trend
+        # store background target regressors spend before and after budget period due to adstock
+        bkg_attr_regressor_matrix = df.loc[calc_mask, self.attr_regressors].values
+        # only background spend involved; turn off all spend during budget decision period
+        bkg_attr_regressor_matrix[self.max_adstock : -self.max_adstock, ...] = 0.0
+        self.bkg_attr_regressor_matrix = bkg_attr_regressor_matrix
 
-        self.bkg_regressors = list(
-            set(self.full_regressors)
-            - set(self.attr_regressors)
-            - set(self.event_regressors)
-            - set(self.control_regressors)
-        )
-        if len(self.bkg_regressors) > 0:
-            bkg_coef_matrix = model.get_coef_matrix(
-                date_array=self.dt_array,
-                regressors=self.bkg_regressors,
-            )
-            bkg_sat_array = sat_df.loc[self.bkg_regressors, "saturation"].values
-            bkg_regressor_matrix = self.df_bau.loc[:, self.bkg_regressors].values
-            bkg_adstock_matrix = model.get_adstock_matrix(self.bkg_regressors)
-            bkg_adstock_regressor_matrix = adstock_process(
-                bkg_regressor_matrix, bkg_adstock_matrix
-            )
-            bkg_adstock_regressor_matrix = np.concatenate(
-                (
-                    np.zeros((self.max_adstock, bkg_adstock_regressor_matrix.shape[1])),
-                    bkg_adstock_regressor_matrix,
-                ),
-                0,
-            )
-            base_comp += np.sum(
-                bkg_coef_matrix
-                * np.log1p(bkg_adstock_regressor_matrix / bkg_sat_array),
-                -1,
-            )
+        # # base_comp = trend + seas
+        # base_comp = trend
 
-        if len(self.event_regressors) > 0:
-            event_coef_matrix = model.get_coef_matrix(
-                date_array=self.dt_array,
-                regressors=self.event_regressors,
-            )
-            event_regressor_matrix = self.df_bau.loc[:, self.event_regressors].values
-            base_comp += np.sum(event_coef_matrix * event_regressor_matrix, -1)
+        # self.bkg_regressors = list(
+        #     set(self.full_regressors)
+        #     - set(self.attr_regressors)
+        #     - set(self.event_regressors)
+        #     - set(self.control_regressors)
+        # )
+        # if len(self.bkg_regressors) > 0:
+        #     bkg_coef_matrix = model.get_coef_matrix(
+        #         date_array=self.dt_array,
+        #         regressors=self.bkg_regressors,
+        #     )
+        #     bkg_sat_array = sat_df.loc[self.bkg_regressors, "saturation"].values
+        #     bkg_regressor_matrix = self.df_bau.loc[:, self.bkg_regressors].values
+        #     bkg_adstock_matrix = model.get_adstock_matrix(self.bkg_regressors)
+        #     bkg_adstock_regressor_matrix = adstock_process(
+        #         bkg_regressor_matrix, bkg_adstock_matrix
+        #     )
+        #     bkg_adstock_regressor_matrix = np.concatenate(
+        #         (
+        #             np.zeros((self.max_adstock, bkg_adstock_regressor_matrix.shape[1])),
+        #             bkg_adstock_regressor_matrix,
+        #         ),
+        #         0,
+        #     )
+        #     base_comp += np.sum(
+        #         bkg_coef_matrix
+        #         * np.log1p(bkg_adstock_regressor_matrix / bkg_sat_array),
+        #         -1,
+        #     )
 
-        if len(self.control_regressors) > 0:
-            control_coef_matrix = model.get_coef_matrix(
-                date_array=self.dt_array,
-                regressors=self.control_regressors,
-            )
-            control_regressor_matrix = np.log1p(
-                self.df_bau.loc[:, self.control_regressors].values
-            )
-            base_comp += np.sum(control_coef_matrix * control_regressor_matrix, -1)
+        # if len(self.event_regressors) > 0:
+        #     event_coef_matrix = model.get_coef_matrix(
+        #         date_array=self.dt_array,
+        #         regressors=self.event_regressors,
+        #     )
+        #     event_regressor_matrix = self.df_bau.loc[:, self.event_regressors].values
+        #     base_comp += np.sum(event_coef_matrix * event_regressor_matrix, -1)
 
-        self.base_comp = base_comp
+        # if len(self.control_regressors) > 0:
+        #     control_coef_matrix = model.get_coef_matrix(
+        #         date_array=self.dt_array,
+        #         regressors=self.control_regressors,
+        #     )
+        #     control_regressor_matrix = np.log1p(
+        #         self.df_bau.loc[:, self.control_regressors].values
+        #     )
+        #     base_comp += np.sum(control_coef_matrix * control_regressor_matrix, -1)
+
+        # self.base_comp = base_comp
 
     def make_attribution(
         self,

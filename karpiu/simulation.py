@@ -292,7 +292,7 @@ def make_mmm_daily_data(
     channels_df = pd.DataFrame(data=channel_features, columns=channels)
     # bias is chosen to make response in a reasonable range ~ 100 to 5k base range
     # noise is generated in this regression module
-    reg_comp = make_regression(reg_covariates, coefs=coefs, bias=6.4, noise_scale=0.25)
+    reg_comp = make_regression(reg_covariates, coefs=coefs, bias=6.4, noise_scale=0.05)
     # latent response
     y = levs + weekly_seas + yearly_seas + reg_comp
 

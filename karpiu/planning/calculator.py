@@ -42,7 +42,8 @@ class CostCurves:
             all_channels = model.get_spend_cols()
             # generate the intersection of input and available channels
             if channels is not None:
-                self.channels = list(set(all_channels).intersection(set(channels)))
+                # self.channels = list(set(all_channels).intersection(set(channels)))
+                self.channels = [x for x in all_channels if x in channels]
             else:
                 self.channels = all_channels
         else:
