@@ -31,8 +31,8 @@ def adstock_process(
 
     # filters formation with shape (n_regressors, 1, n_adstock_weights)
     # the middle dim is 1 as it is correspondent to the elements per group
-    # since we have n_regressors groups which acts parallelly on different channel, 
-    # middle dim = n_res_dim / n_regressors 
+    # since we have n_regressors groups which acts parallelly on different channel,
+    # middle dim = n_res_dim / n_regressors
     # flipping to align with time and convert to torch
     adstock_filters = torch.from_numpy(np.flip(adstock_matrix, 1).copy())
     # middle shape = channels/group = 1
@@ -50,19 +50,13 @@ def adstock_process(
     ), "adstock channels does not match with input channels"
 
     # (n_batches, n_regressors, n_steps - n_adstock_weights)
-    adstocked_values = (
-        F.conv1d(
-            x,
-            adstock_filters,
-            groups=adstock_filters.shape[0],
-        )
+    adstocked_values = F.conv1d(
+        x,
+        adstock_filters,
+        groups=adstock_filters.shape[0],
     )
     # (n_batches, n_steps - n_adstock_weights, n_regressors)
-    adstocked_values = (
-        adstocked_values
-        .transpose(-2, -1)
-        .squeeze(0)
-    )
+    adstocked_values = adstocked_values.transpose(-2, -1).squeeze(0)
     return adstocked_values.detach().numpy()
 
 

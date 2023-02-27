@@ -121,7 +121,9 @@ class BudgetOptimizer:
         bkg_spend_matrix[self.n_max_adstock : -self.n_max_adstock, ...] = 0.0
         self.bkg_spend_matrix = bkg_spend_matrix
 
-        total_budget_constraint = self.generate_total_budget_constraint(total_budget=self.total_budget)
+        total_budget_constraint = self.generate_total_budget_constraint(
+            total_budget=self.total_budget
+        )
         self.add_constraints([total_budget_constraint])
         # ind_budget_constraints = self.generate_individual_channel_constraints(delta=0.1)
         # self.add_constraints(ind_budget_constraints)
@@ -133,7 +135,6 @@ class BudgetOptimizer:
             * self.total_budget
             / self.spend_scaler,
         )
-        
 
     def set_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints = constraints
@@ -141,7 +142,9 @@ class BudgetOptimizer:
     def add_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints += constraints
 
-    def generate_total_budget_constraint(self, total_budget: float) -> optim.LinearConstraint:
+    def generate_total_budget_constraint(
+        self, total_budget: float
+    ) -> optim.LinearConstraint:
         # derive budget constraints based on total sum of init values
         # scipy.optimize.LinearConstraint notation: lb <= A.dot(x) <= ub
         total_budget_constraint = optim.LinearConstraint(
@@ -265,7 +268,8 @@ class RevenueMaximizer(BudgetOptimizer):
             [
                 np.ones((1, 1, self.n_optim_channels)),
                 np.expand_dims(np.eye(self.n_optim_channels), -2),
-            ], axis=0
+            ],
+            axis=0,
         )
 
     def objective_func(self, spend):
@@ -276,8 +280,7 @@ class RevenueMaximizer(BudgetOptimizer):
 
         # duplicate 1 + n_channels scenarios with full spend and one-off spend
         full_sim_sp_matrix = np.tile(
-            np.expand_dims(spend_matrix, 0), 
-            reps=(self.n_optim_channels + 1, 1, 1)
+            np.expand_dims(spend_matrix, 0), reps=(self.n_optim_channels + 1, 1, 1)
         )
         full_sim_sp_matrix = full_sim_sp_matrix * self.design_broadcast_matrix
         full_sim_sp_matrix += self.bkg_spend_matrix
@@ -291,15 +294,18 @@ class RevenueMaximizer(BudgetOptimizer):
         full_tran_sp_matrix = full_sim_tran_sp_matrix[0]
         # (n_regressor, n_steps + n_adstock, n_regressor)
         one_off_sp_matrix = full_sim_tran_sp_matrix[1:, ...]
-        
+
         # (n_steps + n_adstock, )
-        full_comp = np.sum(self.optim_coef_matrix * np.log1p(
-            full_tran_sp_matrix / self.optim_sat_array
-        ), -1)
+        full_comp = np.sum(
+            self.optim_coef_matrix
+            * np.log1p(full_tran_sp_matrix / self.optim_sat_array),
+            -1,
+        )
         # (n_regressor, n_steps + n_adstock, )
-        one_off_comp = np.sum(self.optim_coef_matrix * np.log1p(
-            one_off_sp_matrix / self.optim_sat_array
-        ), -1)
+        one_off_comp = np.sum(
+            self.optim_coef_matrix * np.log1p(one_off_sp_matrix / self.optim_sat_array),
+            -1,
+        )
 
         # (n_regressor, n_steps + n_adstock)
         attr_matrix = np.exp(self.base_comp) * (
@@ -337,7 +343,6 @@ class RevenueMaximizer(BudgetOptimizer):
     #         transformed_spend_matrix / self.optim_sat_array
     #     )
 
-
     #     # one-on approximation
     #     # FIXME: one-on does not capture multiplicative effect; not enough
     #     # base comp does not have the channel dimension so we need expand on last dim
@@ -352,4 +357,3 @@ class RevenueMaximizer(BudgetOptimizer):
     #     net_profit = np.sum(revenue - cost)
     #     loss = -1 * net_profit / self.response_scaler
     #     return loss
-

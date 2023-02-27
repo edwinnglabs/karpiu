@@ -29,11 +29,11 @@ def test_mmm_basic(with_events, adstock_args):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.03, 0.05, 0.028, 0.01, 0.03]
-    channels = ["tv", "radio", "social", "promo", "search"]
-    features_loc = np.array([10000, 5000, 3000, 2000, 850])
-    features_scale = np.array([5000, 3000, 1000, 550, 500])
-    scalability = np.array([1.1, 0.75, 1.3, 1.5, 0.9])
+    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels = ["promo", "radio", "search", "social", "tv"]
+    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
+    features_scale = np.array([550, 2500, 500, 1000, 3500])
+    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
     start_date = "2019-01-01"
 
     np.random.seed(seed)
@@ -102,11 +102,11 @@ def test_events_selection(events_selection):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.03, 0.05, 0.028, 0.01, 0.03]
-    channels = ["tv", "radio", "social", "promo", "search"]
-    features_loc = np.array([10000, 5000, 3000, 2000, 850])
-    features_scale = np.array([5000, 3000, 1000, 550, 500])
-    scalability = np.array([1.1, 0.75, 1.3, 1.5, 0.9])
+    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels = ["promo", "radio", "search", "social", "tv"]
+    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
+    features_scale = np.array([550, 2500, 500, 1000, 3500])
+    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
     start_date = "2019-01-01"
     adstock_args = {
         "n_steps": 28,
@@ -177,11 +177,11 @@ def test_hyper_params_selection(direct_set_hyper_param):
     # data_args
     seed = 2023
     n_steps = 365 * 3
-    channels_coef = [0.03, 0.05, 0.028, 0.01, 0.03]
-    channels = ["tv", "radio", "social", "promo", "search"]
-    features_loc = np.array([10000, 5000, 3000, 2000, 850])
-    features_scale = np.array([5000, 3000, 1000, 550, 500])
-    scalability = np.array([1.1, 0.75, 1.3, 1.5, 0.9])
+    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels = ["promo", "radio", "search", "social", "tv"]
+    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
+    features_scale = np.array([550, 2500, 500, 1000, 3500])
+    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
     start_date = "2019-01-01"
     adstock_args = {
         "n_steps": 28,
@@ -263,11 +263,11 @@ def test_seasonality(
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.03, 0.05, 0.028, 0.01, 0.03]
-    channels = ["tv", "radio", "social", "promo", "search"]
-    features_loc = np.array([10000, 5000, 3000, 2000, 850])
-    features_scale = np.array([5000, 3000, 1000, 550, 500])
-    scalability = np.array([1.1, 0.75, 1.3, 1.5, 0.9])
+    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels = ["promo", "radio", "search", "social", "tv"]
+    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
+    features_scale = np.array([550, 2500, 500, 1000, 3500])
+    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
     start_date = "2019-01-01"
     adstock_args = {
         "n_steps": 28,
