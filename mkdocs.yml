@@ -9,7 +9,7 @@ nav:
     - Attribution: ./examples/attribution.ipynb
   - Optimization:
     - Target Maximization: ./examples/target_max.ipynb
-    - Net Returns Maximization: ./examples/net_returns.ipynb
+    - Net Returns Maximization: ./examples/net_returns_max.ipynb
 
 plugins:
   - mkdocs-jupyter
