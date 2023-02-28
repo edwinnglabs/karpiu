@@ -38,7 +38,7 @@ class MMM:
         kpi_col: str,
         date_col: str,
         spend_cols: List[str],
-        adstock_df: pd.DataFrame,
+        adstock_df: Optional[pd.DataFrame] = None,
         # scalability_df: Optional[pd.DataFrame] = None,
         control_feat_cols: Optional[List[str]] = None,
         event_cols: Optional[List[str]] = None,
@@ -582,7 +582,6 @@ class MMM:
 
         df = df.copy()
         transform_df = self._preprocess_df(df, transform_response=False)
-
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
 
         # _5 and _95 probably won't exist with median prediction for current version
@@ -613,6 +612,7 @@ class MMM:
                 ]
             )
             pred["paid"] = reg_paid
+
             if self.event_cols:
                 # (n_regressors, )
                 coef_event = self.get_coef_vector(self.event_cols)
@@ -626,6 +626,7 @@ class MMM:
                     ]
                 )
                 pred["events"] = reg_event
+
             if len(self.fs_cols) > 0:
                 for s, fs_col in zip(self.seasonality, self.fs_cols):
                     # (n_regressors, )
@@ -640,6 +641,7 @@ class MMM:
                         ]
                     )
                     pred["s-{} seasonality".format(s)] = reg_fs
+
             if len(self.control_feat_cols) > 0:
                 # (n_regressors, )
                 coef_control = self.get_coef_vector(self.control_feat_cols)
