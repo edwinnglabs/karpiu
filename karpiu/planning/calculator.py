@@ -467,28 +467,28 @@ def calculate_marginal_cost(
     transformed_spend_matrix = adstock_process(baseline_spend_matrix, adstock_matrix)
     transformed_spend_matrix = np.log1p(transformed_spend_matrix / sat_arr)
     reg_comp = np.sum(coef_matrix * transformed_spend_matrix, axis=-1)
-    baseline_pred_comp =  base_comp * np.exp(reg_comp)
+    baseline_pred_comp = base_comp * np.exp(reg_comp)
 
     # the varying comp is computed below
     marginal_cost = np.empty(len(channels))
     for idx, ch in enumerate(channels):
         # (calc_steps, n_regressors)
         delta_matrix = np.zeros_like(baseline_spend_matrix)
-        if max_adstock > 0:            
+        if max_adstock > 0:
             delta_matrix[max_adstock:-max_adstock, idx] = delta
         else:
             delta_matrix += delta
 
         # (calc_steps, n_regressors)
         new_spend_matrix = baseline_spend_matrix + delta_matrix
-        new_transformed_spend_matrix = adstock_process(
-            new_spend_matrix, adstock_matrix
-        )
+        new_transformed_spend_matrix = adstock_process(new_spend_matrix, adstock_matrix)
         new_transformed_spend_matrix = np.log1p(new_transformed_spend_matrix / sat_arr)
         new_reg_comp = np.sum(coef_matrix * new_transformed_spend_matrix, -1)
 
-        new_pred_comp =  base_comp * np.exp(new_reg_comp)
-        marginal_cost[idx] = np.sum(delta_matrix) / np.sum(new_pred_comp - baseline_pred_comp)
+        new_pred_comp = base_comp * np.exp(new_reg_comp)
+        marginal_cost[idx] = np.sum(delta_matrix) / np.sum(
+            new_pred_comp - baseline_pred_comp
+        )
 
     return pd.DataFrame(
         {

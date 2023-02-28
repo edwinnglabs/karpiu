@@ -22,7 +22,7 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -31,7 +31,6 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
     best_params = {
         "damped_factor": 0.9057,
         "level_sm_input": 0.0245,
-        "slope_sm_input": 0.0943,
     }
 
     np.random.seed(seed)
@@ -103,6 +102,9 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
     res = attr_obj.make_attribution(debug=True)
     activities_attr_df, spend_attr_df, spend_df, cost_df = res
     delta_matrix = attr_obj.delta_matrix
+
+    assert np.all(delta_matrix >= 0.0)
+
     # prediction delta
     full_pred = mmm.predict(df)
     full_comp = full_pred.loc[full_pred["date"] == "2020-03-01", "prediction"].values
@@ -148,7 +150,7 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -157,7 +159,6 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
     best_params = {
         "damped_factor": 0.9057,
         "level_sm_input": 0.0245,
-        "slope_sm_input": 0.0943,
     }
     adstock_args = {
         "n_steps": 28,
@@ -207,10 +208,17 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
             end="2020-01-31",
         )
 
-        res = attr_obj.make_attribution()
+        res = attr_obj.make_attribution(debug=True)
+        delta_matrix = attr_obj.delta_matrix
+        # after the adstock period, all delta should be finite
+        assert np.all(delta_matrix[mmm.get_max_adstock() :, ...] >= 0.0)
         activities_attr_df, spend_attr_df, spend_df, cost_df = res
 
-        assert activities_attr_df.shape == spend_attr_df.shape
+        assert (
+            activities_attr_df.shape[0]
+            == spend_attr_df.shape[0] + mmm.get_max_adstock()
+        )
+        assert activities_attr_df.shape[1] == spend_attr_df.shape[1]
         assert spend_attr_df.shape[0] == spend_df.shape[0]
         assert spend_attr_df.shape[1] - 1 == spend_df.shape[1]
         assert cost_df.shape[0] == spend_df.shape[0]

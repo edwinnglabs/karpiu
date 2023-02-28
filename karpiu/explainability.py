@@ -622,7 +622,6 @@ def make_attribution_numpy(
     # get the sum for all channels and adstock effect
     # (n_steps, 1, 1)
     total_delta = np.sum(delta_matrix, axis=(-1, -2), keepdims=True)
-    assert np.all(delta_matrix >= 0.0)
 
     # remove zeros to avoid divide-by-zero issue
     index_zero = total_delta == 0

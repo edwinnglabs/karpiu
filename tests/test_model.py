@@ -29,14 +29,12 @@ def test_mmm_basic(with_events, adstock_args):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
     scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
     start_date = "2019-01-01"
-
-    np.random.seed(seed)
 
     df, scalability_df, adstock_df, event_cols = make_mmm_daily_data(
         channels_coef=channels_coef,
@@ -102,7 +100,7 @@ def test_events_selection(events_selection):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -169,15 +167,35 @@ def test_events_selection(events_selection):
 
 
 @pytest.mark.parametrize(
-    "direct_set_hyper_param",
-    [True, False],
-    ids=["direct_set_hyper_param", "optim_hyper_param"],
+    "best_params",
+    [
+        {
+            "damped_factor": 0.9057,
+            "level_sm_input": 0.0245,
+        },
+        {
+            "damped_factor": 0.9057,
+            "slope_sm_input": 0.0245,
+            "level_sm_input": 0.0245,
+        },
+        {
+            "slope_sm_input": 0.0245,
+            "level_sm_input": 0.0245,
+        },
+        None,
+    ],
+    ids=[
+        "optim_hyper_param_1",
+        "optim_hyper_param_2",
+        "optim_hyper_param_3",
+        "direct_set_hyper_param",
+    ],
 )
-def test_hyper_params_selection(direct_set_hyper_param):
+def test_hyper_params_selection(best_params):
     # data_args
     seed = 2023
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -188,11 +206,6 @@ def test_hyper_params_selection(direct_set_hyper_param):
         "peak_step": np.array([10, 8, 5, 3, 2]),
         "left_growth": np.array([0.05, 0.08, 0.1, 0.5, 0.75]),
         "right_growth": np.array([-0.03, -0.6, -0.5, -0.1, -0.25]),
-    }
-    best_params = {
-        "damped_factor": 0.9057,
-        "level_sm_input": 0.0245,
-        "slope_sm_input": 0.0943,
     }
 
     np.random.seed(seed)
@@ -219,7 +232,7 @@ def test_hyper_params_selection(direct_set_hyper_param):
     )
     mmm.derive_saturation(df=df, scalability_df=scalability_df)
     mmm.set_features(event_cols[1:3])
-    if direct_set_hyper_param:
+    if best_params is not None:
         mmm.set_hyper_params(best_params)
     else:
         mmm.optim_hyper_params(df)
@@ -244,7 +257,7 @@ def test_hyper_params_selection(direct_set_hyper_param):
     assert metrics <= 0.5
 
 
-# TODO: may check additional regression coefs from the Fourier terms
+# TODO: may check additional regression coefs existence from the Fourier terms
 @pytest.mark.parametrize(
     "with_yearly_seasonality, with_weekly_seasonality, seasonality, fs_orders",
     [
@@ -263,7 +276,7 @@ def test_seasonality(
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.15, 0.19, 0.175, 0.15]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -278,7 +291,6 @@ def test_seasonality(
     best_params = {
         "damped_factor": 0.9057,
         "level_sm_input": 0.0245,
-        "slope_sm_input": 0.0943,
     }
     np.random.seed(seed)
 

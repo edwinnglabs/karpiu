@@ -219,7 +219,7 @@ def make_mmm_daily_data(
     else:
         event_cols = list()
 
-    levs = make_trend(n_steps=n_steps, rw_loc=0.001, rw_scale=0.01)
+    levs = make_trend(n_steps=n_steps, rw_loc=0.0005, rw_scale=0.00245)
 
     if with_yearly_seasonality:
         yearly_seas = make_seasonality(
@@ -230,7 +230,7 @@ def make_mmm_daily_data(
 
     if with_weekly_seasonality:
         weekly_seas = make_seasonality(
-            order=2, scale=0.02, n_steps=n_steps, seasonality=7
+            order=2, scale=0.33, n_steps=n_steps, seasonality=7
         )
     else:
         weekly_seas = np.zeros(n_steps)
