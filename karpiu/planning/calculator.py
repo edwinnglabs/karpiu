@@ -418,7 +418,7 @@ def calculate_marginal_cost(
     spend_start: str,
     spend_end: str,
     spend_df: Optional[pd.DataFrame] = None,
-    delta: float = 1e-7,
+    delta: float = 1e-1,
 ) -> pd.DataFrame:
     """Generate overall marginal cost per channel with given period [spend_start, spend_end]
     Args:
@@ -433,16 +433,12 @@ def calculate_marginal_cost(
 
     """
     if spend_df is None:
-        df = model.raw_df.copy()
+        df = model.get_raw_df()
     else:
         df = spend_df.copy()
 
     date_col = model.date_col
     max_adstock = model.get_max_adstock()
-    full_regressors = model.get_regressors()
-    event_regressors = model.get_event_cols()
-    control_regressors = model.get_control_feat_cols()
-    sat_df = model.get_saturation()
 
     spend_start = pd.to_datetime(spend_start)
     spend_end = pd.to_datetime(spend_end)
@@ -454,87 +450,45 @@ def calculate_marginal_cost(
     spend_mask = (df[date_col] >= spend_start) & (df[date_col] <= spend_end)
     mea_mask = (df[date_col] >= mea_start) & (df[date_col] <= mea_end)
     calc_mask = (df[date_col] >= calc_start) & (df[date_col] <= calc_end)
-
-    dummy_pred_df = model.predict(df=df, decompose=True)
-    # log scale (mea_steps, )
-    trend = dummy_pred_df.loc[mea_mask, "trend"].values
-    # seas = dummy_pred_df.loc[mea_mask, 'weekly seasonality'].values
-    # base_comp = trend + seas
-    base_comp = trend
-
-    # TODO: this block looks similar to some part of the Attributor; investigate whether we can
-    # TODO: refactor this
-    # background regressors
-    bkg_regressors = list(
-        set(full_regressors)
-        - set(channels)
-        - set(event_regressors)
-        - set(control_regressors)
-    )
-
-    if len(bkg_regressors) > 0:
-        # (n_regressors, )
-        bkg_coef_array = model.get_coef_vector(regressors=bkg_regressors)
-        # (n_regressors, )
-        bkg_sat_array = sat_df.loc[bkg_regressors, "saturation"].values
-        # (calc_steps, n_regressors)
-        bkg_regressor_matrix = df.loc[calc_mask, bkg_regressors].values
-        bkg_adstock_filter_matrix = model.get_adstock_matrix(bkg_regressors)
-        # (mea_steps, n_regressors)
-        bkg_adstock_regressor_matrix = adstock_process(
-            bkg_regressor_matrix,
-            bkg_adstock_filter_matrix,
-        )
-
-        base_comp += np.sum(
-            bkg_coef_array * np.log1p(bkg_adstock_regressor_matrix / bkg_sat_array),
-            -1,
-        )
-
-    if len(event_regressors) > 0:
-        event_coef_array = model.get_coef_vector(regressors=event_regressors)
-        # (mea_steps, n_regressors)
-        event_regressor_matrix = df.loc[mea_mask, event_regressors].values
-        base_comp += np.sum(event_coef_array * event_regressor_matrix, -1)
-
-    if len(control_regressors) > 0:
-        control_coef_array = model.get_coef_vector(regressors=control_regressors)
-        # (mea_steps, n_regressors)
-        control_regressor_matrix = np.log1p(df.loc[mea_mask, control_regressors].values)
-        base_comp += np.sum(control_coef_array * control_regressor_matrix, -1)
+    dt_arr = df.loc[mea_mask, date_col].values
 
     # base_comp calculation finished above
+    zero_df = df.copy()
+    zero_df[channels] = 0.0
+    zero_pred_df = model.predict(df=zero_df)
+    base_comp = zero_pred_df.loc[mea_mask, "prediction"].values
+
+    baseline_spend_matrix = df.loc[calc_mask, channels].values
+    sat_arr = model.get_saturation_vector(regressors=channels)
+    adstock_matrix = model.get_adstock_matrix(spend_cols=channels)
+    coef_matrix = model.get_coef_matrix(date_array=dt_arr, regressors=channels)
+
+    # (mea_steps, n_regressors)
+    transformed_spend_matrix = adstock_process(baseline_spend_matrix, adstock_matrix)
+    transformed_spend_matrix = np.log1p(transformed_spend_matrix / sat_arr)
+    reg_comp = np.sum(coef_matrix * transformed_spend_matrix, axis=-1)
+    baseline_pred_comp =  base_comp * np.exp(reg_comp)
+
     # the varying comp is computed below
-    attr_regressor_matrix = df.loc[calc_mask, channels].values
-    attr_coef_array = model.get_coef_vector(regressors=channels)
-    attr_sat_array = sat_df.loc[channels, "saturation"].values
-    attr_adstock_matrix = model.get_adstock_matrix(channels)
-    attr_adstock_regressor_matrix = adstock_process(
-        attr_regressor_matrix, attr_adstock_matrix
-    )
-    # log scale
-    attr_comp = np.sum(
-        attr_coef_array * np.log1p(attr_adstock_regressor_matrix / attr_sat_array),
-        -1,
-    )
     marginal_cost = np.empty(len(channels))
     for idx, ch in enumerate(channels):
         # (calc_steps, n_regressors)
-        delta_matrix = np.zeros_like(attr_regressor_matrix)
-        delta_matrix[max_adstock:-max_adstock, idx] = delta
-        # (calc_steps, n_regressors)
-        new_attr_regressor_matrix = attr_regressor_matrix + delta_matrix
-        new_attr_adstock_regressor_matrix = adstock_process(
-            new_attr_regressor_matrix, attr_adstock_matrix
-        )
-        new_attr_comp = np.sum(
-            attr_coef_array
-            * np.log1p(new_attr_adstock_regressor_matrix / attr_sat_array),
-            -1,
-        )
+        delta_matrix = np.zeros_like(baseline_spend_matrix)
+        if max_adstock > 0:            
+            delta_matrix[max_adstock:-max_adstock, idx] = delta
+        else:
+            delta_matrix += delta
 
-        m_acq = np.exp(base_comp) * (np.exp(new_attr_comp) - np.exp(attr_comp))
-        marginal_cost[idx] = np.sum(delta_matrix) / np.sum(m_acq)
+        # (calc_steps, n_regressors)
+        new_spend_matrix = baseline_spend_matrix + delta_matrix
+        new_transformed_spend_matrix = adstock_process(
+            new_spend_matrix, adstock_matrix
+        )
+        new_transformed_spend_matrix = np.log1p(new_transformed_spend_matrix / sat_arr)
+        new_reg_comp = np.sum(coef_matrix * new_transformed_spend_matrix, -1)
+
+        new_pred_comp =  base_comp * np.exp(new_reg_comp)
+        marginal_cost[idx] = np.sum(delta_matrix) / np.sum(new_pred_comp - baseline_pred_comp)
 
     return pd.DataFrame(
         {
@@ -552,6 +506,7 @@ def generate_cost_report(
     pre_spend_df: pd.DataFrame,
     post_spend_df: pd.DataFrame,
     spend_scaler: float = 1e3,
+    delta: float = 1e-1,
 ):
     """A wrapper function combining calculation of average and marginal cost in pre and post optimization"""
     # report average and marginal cost
@@ -576,6 +531,7 @@ def generate_cost_report(
         channels=channels,
         spend_start=start,
         spend_end=end,
+        delta=delta,
     )
 
     pre_opt_report = pd.concat(

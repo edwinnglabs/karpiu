@@ -316,37 +316,37 @@ class Attributor:
                 df.loc[self.calc_mask, self.attr_regressors].values
             )
 
-        # trend = zero_pred_df["trend"].values
+        # trend = zero_pred_df.loc[self.calc_mask, "trend"].values
         # # base_comp = trend + seas
         # base_comp = trend
 
-        # self.bkg_regressors = list(
+        # self.non_attr_regressors = list(
         #     set(self.full_regressors)
         #     - set(self.attr_regressors)
         #     - set(self.event_regressors)
         #     - set(self.control_regressors)
         # )
-        # if len(self.bkg_regressors) > 0:
-        #     bkg_coef_matrix = model.get_coef_matrix(
+        # if len(self.non_attr_regressors) > 0:
+        #     non_attr_coef_matrix = model.get_coef_matrix(
         #         date_array=self.dt_array,
-        #         regressors=self.bkg_regressors,
+        #         regressors=self.non_attr_regressors,
         #     )
-        #     bkg_sat_array = sat_df.loc[self.bkg_regressors, "saturation"].values
-        #     bkg_regressor_matrix = self.df_bau.loc[:, self.bkg_regressors].values
-        #     bkg_adstock_matrix = model.get_adstock_matrix(self.bkg_regressors)
-        #     bkg_adstock_regressor_matrix = adstock_process(
-        #         bkg_regressor_matrix, bkg_adstock_matrix
+        #     non_attr_sat_array = sat_df.loc[self.non_attr_regressors, "saturation"].values
+        #     non_attr_regressor_matrix = self.df.loc[self.calc_mask, self.non_attr_regressors].values
+        #     non_attr_adstock_matrix = model.get_adstock_matrix(self.non_attr_regressors)
+        #     non_attr_adstock_regressor_matrix = adstock_process(
+        #         non_attr_regressor_matrix, non_attr_adstock_matrix
         #     )
-        #     bkg_adstock_regressor_matrix = np.concatenate(
+        #     non_attr_adstock_regressor_matrix = np.concatenate(
         #         (
-        #             np.zeros((self.max_adstock, bkg_adstock_regressor_matrix.shape[1])),
-        #             bkg_adstock_regressor_matrix,
+        #             np.zeros((self.max_adstock, non_attr_adstock_regressor_matrix.shape[1])),
+        #             non_attr_adstock_regressor_matrix,
         #         ),
         #         0,
         #     )
         #     base_comp += np.sum(
-        #         bkg_coef_matrix
-        #         * np.log1p(bkg_adstock_regressor_matrix / bkg_sat_array),
+        #         non_attr_coef_matrix
+        #         * np.log1p(non_attr_adstock_regressor_matrix / non_attr_sat_array),
         #         -1,
         #     )
 
@@ -355,7 +355,8 @@ class Attributor:
         #         date_array=self.dt_array,
         #         regressors=self.event_regressors,
         #     )
-        #     event_regressor_matrix = self.df_bau.loc[:, self.event_regressors].values
+
+        #     event_regressor_matrix = self.df.loc[self.calc_mask, self.event_regressors].values
         #     base_comp += np.sum(event_coef_matrix * event_regressor_matrix, -1)
 
         # if len(self.control_regressors) > 0:
@@ -364,7 +365,7 @@ class Attributor:
         #         regressors=self.control_regressors,
         #     )
         #     control_regressor_matrix = np.log1p(
-        #         self.df_bau.loc[:, self.control_regressors].values
+        #         self.df.loc[self.calc_mask, self.control_regressors].values
         #     )
         #     base_comp += np.sum(control_coef_matrix * control_regressor_matrix, -1)
 
@@ -393,7 +394,8 @@ class Attributor:
         date_col = self.date_col
         # base df for different report
         # (n_steps, n_channels)
-        df_bau = self.df.loc[self.calc_mask,].reset_index()
+        df_bau = self.df.loc[self.calc_mask,]
+        df_bau = df_bau.reset_index(drop=True)
 
         # (n_steps, n_attr_regressors)
         attr_coef_matrix = self.attr_coef_matrix.copy()
@@ -439,34 +441,42 @@ class Attributor:
             saturation_array=self.attr_sat_array,
             true_up_arr=true_up_array,
         )
-
+        # print(spend_attr_matrix.shape)
+        # print(activities_attr_matrix.shape)
+        # print(self.max_adstock)
         if debug:
             self.delta_matrix = delta_matrix
 
         # note that activities based attribution only makes sense when spend is fully settled after adstock process
         # hence first n(=max_adstock) need to be discarded
-        activities_attr_df = df_bau[self.max_adstock :].reset_index(drop=True)
-        activities_attr_df = activities_attr_df[[date_col]]
-        activities_attr_df[["organic"] + self.attr_regressors] = activities_attr_matrix[
-            self.max_adstock :
-        ]
 
         # note that spend attribution only makes sense when all attributing metric fully observed in the entire
         # adstock process
         # also need to discard first n(=max_adstock) observation as you cannot observe the correct pred_bau
         # hence last n(=max_adstock) need to be discarded
-        spend_attr_df = df_bau.loc[
-            self.max_adstock : df_bau.shape[0] - self.max_adstock
-        ].reset_index(drop=True)
-        spend_attr_df = spend_attr_df[[date_col]]
-        spend_attr_df[["organic"] + self.attr_regressors] = spend_attr_matrix[
-            self.max_adstock : spend_attr_matrix.shape[0] - self.max_adstock
-        ]
-
-        spend_df = df_bau.loc[
-            self.max_adstock : df_bau.shape[0] - self.max_adstock
-        ].reset_index(drop=True)
-        spend_df = spend_df[[date_col] + self.attr_regressors]
+        if self.max_adstock > 0:
+            activities_attr_df = df_bau[self.max_adstock :][[date_col]]
+            activities_attr_df[
+                ["organic"] + self.attr_regressors
+            ] = activities_attr_matrix[self.max_adstock :]
+            activities_attr_df = activities_attr_df.reset_index(drop=True)
+            spend_attr_df = df_bau[self.max_adstock : -self.max_adstock][[date_col]]
+            spend_attr_df[["organic"] + self.attr_regressors] = spend_attr_matrix[
+                self.max_adstock : -self.max_adstock
+            ]
+            spend_attr_df = spend_attr_df.reset_index(drop=True)
+            spend_df = df_bau[self.max_adstock : -self.max_adstock][
+                [date_col] + self.attr_regressors
+            ]
+            spend_df = spend_df.reset_index(drop=True)
+        else:
+            activities_attr_df = df_bau[[date_col]]
+            activities_attr_df[
+                ["organic"] + self.attr_regressors
+            ] = activities_attr_matrix
+            spend_attr_df = df_bau[[date_col]]
+            spend_attr_df[["organic"] + self.attr_regressors] = spend_attr_matrix
+            spend_df = df_bau[[date_col] + self.attr_regressors]
 
         cost_df = spend_df[[date_col]].copy()
         cost_df[self.attr_regressors] = (

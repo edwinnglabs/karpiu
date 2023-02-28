@@ -582,9 +582,8 @@ class MMM:
 
         df = df.copy()
         transform_df = self._preprocess_df(df, transform_response=False)
-        print(transform_df)
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
-        print(pred.loc[pred["date"] == "2020-03-01"])
+
         # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [
             x
@@ -597,7 +596,7 @@ class MMM:
         # preserve the shape of original input; first n(=adstock) will have null values
         pred = pd.merge(pred_base, pred, on=[self.date_col], how="left")
         n_max_adstock = self.get_max_adstock()
-        print(pred.loc[pred["date"] == "2020-03-01"])
+
         # unlike orbit, decompose the regression and seasonal regression here
         if decompose:
             # pred = pred.drop(columns=['regression']).rename(columns={'seasonality': 'weekly seasonality'})
@@ -613,6 +612,7 @@ class MMM:
                 ]
             )
             pred["paid"] = reg_paid
+
             if self.event_cols:
                 # (n_regressors, )
                 coef_event = self.get_coef_vector(self.event_cols)
@@ -626,6 +626,7 @@ class MMM:
                     ]
                 )
                 pred["events"] = reg_event
+
             if len(self.fs_cols) > 0:
                 for s, fs_col in zip(self.seasonality, self.fs_cols):
                     # (n_regressors, )
@@ -640,8 +641,6 @@ class MMM:
                         ]
                     )
                     pred["s-{} seasonality".format(s)] = reg_fs
-                print("here-fs-orders-reg")
-                print(reg_fs[425])
 
             if len(self.control_feat_cols) > 0:
                 # (n_regressors, )
