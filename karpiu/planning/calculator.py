@@ -150,7 +150,7 @@ class CostCurves:
         if multipliers is None:
             multipliers = self.get_multipliers()
 
-        if not (isinstance(multipliers, dict) or isinstance(multipliers, list)):
+        if not (isinstance(multipliers, (dict, list, np.ndarray, pd.core.series.Series))):
             raise Exception("Invalid multipliers type -- must be in Dict or List type.")
 
         # output
