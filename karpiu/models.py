@@ -599,8 +599,7 @@ class MMM:
 
         # unlike orbit, decompose the regression and seasonal regression here
         if decompose:
-            # pred = pred.drop(columns=['regression']).rename(columns={'seasonality': 'weekly seasonality'})
-            pred = pred.drop(columns=["regression"])
+            pred = pred.drop(columns=["seasonality", "regression"])
             # (n_regressors, )
             coef_paid = self.get_coef_vector(self.spend_cols)
             # (n_steps, n_regressors)
