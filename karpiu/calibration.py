@@ -45,7 +45,15 @@ class PriorSolver:
             tests_df = self.tests_df.sample(frac=1, ignore_index=True)
         else:
             tests_df = self.tests_df.copy()
+            
         output_df = tests_df.copy()
+
+        # initialize values
+        output_df["coef_prior"] = np.nan
+        output_df["sigma_prior"] = np.nan
+        output_df["test_spend"] = np.nan
+        output_df["test_lift"] = np.nan
+
         date_col = model.date_col
 
         if debug:
@@ -57,7 +65,8 @@ class PriorSolver:
                 test_icac = row["test_icac"]
                 test_channel = row["test_channel"]
                 test_se = row["test_se"]
-
+                logger.info("test channel:{}".format(test_channel))
+                
                 # derive test spend
                 mask = (input_df[date_col] >= test_start) & (
                     input_df[date_col] <= test_end
@@ -66,6 +75,10 @@ class PriorSolver:
                 test_spend = sub_input_df[test_channel].sum()
                 # derive lift from spend data from model to ensure consistency
                 test_lift = test_spend / test_icac
+                if test_lift <=1e-5 or test_spend <= 1e-5:
+                    logger.info("Minimal lift or spend detected of the channel. Skip prior derivation.")
+                    continue
+                
                 test_lift_upper = test_spend / (test_icac - test_se)
 
                 # create a callback used for scipy.optimize.fsolve
@@ -96,13 +109,14 @@ class PriorSolver:
                     x0=init_search_pt,
                     args=test_lift_upper,
                 )[0]
-                logger.info("test channel:{}".format(test_channel))
                 logger.info(
                     "test spend: {:.3f}, test lift: {:.3f}".format(
                         test_spend, test_lift
                     )
                 )
-                sigma_prior = (coef_prior_upper - coef_prior) * 0.3
+                sigma_prior = (coef_prior_upper - coef_prior)
+                sigma_prior = max(sigma_prior, 1e-3)
+
                 logger.info(
                     "coef prior: {:.3f}, sigma prior: {:.3f}".format(
                         coef_prior, sigma_prior
@@ -111,11 +125,11 @@ class PriorSolver:
 
                 # store derived result
                 output_df.loc[idx, "coef_prior"] = coef_prior
-                # since model can be over-confident on empirical result and the non-linear relationship,
-                # introduce a 0.3 haircut on the derive sigma here
                 output_df.loc[idx, "sigma_prior"] = sigma_prior
                 output_df.loc[idx, "test_spend"] = test_spend
                 output_df.loc[idx, "test_lift"] = test_lift
+
+            output_df = output_df.loc[np.isfinite(output_df["coef_prior"])].reset_index(drop=True)
 
             return output_df
 
