@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import pandas as pd
+from copy import deepcopy
 
 from karpiu.models import MMM
 from karpiu.simulation import make_mmm_daily_data
