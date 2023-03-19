@@ -8,6 +8,7 @@ from karpiu.planning import TargetMaximizer, generate_cost_report
 from karpiu.utils import adstock_process
 
 
+# test the inner numpy style prediction is the same as the prediction from model object
 @pytest.mark.parametrize(
     "with_events",
     [True, False],
@@ -112,6 +113,9 @@ def test_target_maximizer_init(with_events, seasonality, fs_orders):
     assert np.allclose(pred_comp_from_optim, pred_comp)
 
 
+# test target maximizer optimization behaviors
+# 1. with total budget constraint, always spend the total i.e. init total = optimal total
+# 2. marginal cost should be the same, optimization is indifferent with channels
 def test_target_maximizer():
     # data_args
     seed = 2022

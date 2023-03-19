@@ -1,6 +1,6 @@
 import numpy as np
 
-from karpiu.utils import np_shift
+from karpiu.utils import np_shift, adstock_process
 
 
 def test_np_shift():
@@ -27,3 +27,39 @@ def test_np_shift():
 
     assert np.all(np.equal(np_shift(x, k), x_shift_down))
     assert np.all(np.equal(np_shift(x, -1 * k), x_shift_up))
+
+
+def test_adstock():
+    # moving average with each element 4 x 10 times and 3 steps reduced (4 steps on filter)
+    input_x = np.full((10, 6), np.arange(0, 6)).astype(float)
+    adstock_filters = np.full((6, 4), 10.)
+    output_x = adstock_process(input_x, adstock_filters)
+    expected = np.array(
+        [[  0.,  40.,  80., 120., 160., 200.],
+       [  0.,  40.,  80., 120., 160., 200.],
+       [  0.,  40.,  80., 120., 160., 200.],
+       [  0.,  40.,  80., 120., 160., 200.],
+       [  0.,  40.,  80., 120., 160., 200.],
+       [  0.,  40.,  80., 120., 160., 200.],
+       [  0.,  40.,  80., 120., 160., 200.]]
+    ) 
+    assert np.all(np.equal(output_x, expected))
+
+    # test batch size - vectorizing scenarios at first dim with same filter
+    multi_input_x = np.tile(np.expand_dims(input_x, 0), (3, 1, 1))
+    output_x = adstock_process(multi_input_x, adstock_filters)
+    for idx in range(3):
+        assert np.all(np.equal(output_x[idx], expected))
+
+    # redo this with identical filter
+    # 1 step and 100% weight should mean input is identical to output  
+    input_x = np.full((10, 6), np.arange(0, 6)).astype(float)
+    adstock_filters = np.ones((6, 1))
+    output_x = adstock_process(input_x, adstock_filters)
+    assert np.all(np.equal(output_x, input_x))
+
+    # test batch size - vectorizing scenarios at first dim with same filter
+    multi_input_x = np.tile(np.expand_dims(input_x, 0), (3, 1, 1))
+    output_x = adstock_process(multi_input_x, adstock_filters)
+    for idx in range(3):
+        assert np.all(np.equal(output_x[idx], input_x))

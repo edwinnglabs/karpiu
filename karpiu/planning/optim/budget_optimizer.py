@@ -1,24 +1,12 @@
 import pandas as pd
 import numpy as np
-from tqdm.auto import tqdm
 from typing import Optional, List
 import logging
-from ..models import MMM
 import scipy.optimize as optim
 from copy import deepcopy
 
-from ..explainability import Attributor
-from ..utils import adstock_process
-
-
-# TODO:
-# add more issues e.g.
-# 1. add individual budget constraints [done]
-# 2. add tutorials and demo [done]
-# 3. add attribution tutorials [done]
-# 4. add better auto doc workflow [done]
-# 5. add unit test of attribution [done]
-# 6. add unit test of optimization
+from ...models import MMM
+from ...explainability import Attributor
 
 
 class BudgetOptimizer:
@@ -224,137 +212,3 @@ class BudgetOptimizer:
         optim_df.loc[self.budget_mask, self.optim_channel] = optim_spend_matrix
         self.curr_spend_matrix = optim_spend_matrix
         return optim_df
-
-
-class TargetMaximizer(BudgetOptimizer):
-    """Perform optimization with a given Marketing Mix Model"""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def objective_func(self, spend):
-        spend_matrix = spend.reshape(-1, self.n_optim_channels) * self.spend_scaler
-        zero_paddings = np.zeros((self.n_max_adstock, self.n_optim_channels))
-        spend_matrix = np.concatenate([zero_paddings, spend_matrix, zero_paddings], 0)
-        spend_matrix += self.bkg_spend_matrix
-        transformed_spend_matrix = adstock_process(
-            spend_matrix, self.optim_adstock_matrix
-        )
-        # regression
-        spend_comp = np.sum(
-            self.optim_coef_matrix
-            * np.log1p(transformed_spend_matrix / self.optim_sat_array),
-            -1,
-        )
-        pred_outcome = np.exp(self.base_comp + spend_comp)
-        loss = -1 * np.sum(pred_outcome) / self.response_scaler
-        return loss
-
-
-class RevenueMaximizer(BudgetOptimizer):
-    """Perform revenue optimization with a given Marketing Mix Model and
-    lift-time values (LTV) per channel
-    """
-
-    def __init__(self, ltv_arr: np.array, **kwargs):
-        super().__init__(**kwargs)
-        transformed_bkg_matrix = adstock_process(
-            self.bkg_spend_matrix, self.optim_adstock_matrix
-        )
-        self.bkg_attr_comp = self.optim_coef_matrix * np.log1p(
-            transformed_bkg_matrix / self.optim_sat_array
-        )
-        self.ltv_arr = ltv_arr
-        self.design_broadcast_matrix = np.concatenate(
-            [
-                np.ones((1, 1, self.n_optim_channels)),
-                np.expand_dims(np.eye(self.n_optim_channels), -2),
-            ],
-            axis=0,
-        )
-
-    def objective_func(self, spend):
-        spend_matrix = spend.reshape(-1, self.n_optim_channels) * self.spend_scaler
-        zero_paddings = np.zeros((self.n_max_adstock, self.n_optim_channels))
-        # (n_steps + 2 * n_max_adstock, n_channels)
-        spend_matrix = np.concatenate([zero_paddings, spend_matrix, zero_paddings], 0)
-
-        # duplicate 1 + n_channels scenarios with full spend and one-off spend
-        full_sim_sp_matrix = np.tile(
-            np.expand_dims(spend_matrix, 0), reps=(self.n_optim_channels + 1, 1, 1)
-        )
-        full_sim_sp_matrix = full_sim_sp_matrix * self.design_broadcast_matrix
-        full_sim_sp_matrix += self.bkg_spend_matrix
-        # (n_regressor + 1, n_steps + n_adstock, n_regressor)
-        full_sim_tran_sp_matrix = adstock_process(
-            full_sim_sp_matrix,
-            self.optim_adstock_matrix,
-        )
-
-        # (n_steps + n_adstock, n_regressor)
-        full_tran_sp_matrix = full_sim_tran_sp_matrix[0]
-        # (n_regressor, n_steps + n_adstock, n_regressor)
-        one_off_sp_matrix = full_sim_tran_sp_matrix[1:, ...]
-
-        # (n_steps + n_adstock, )
-        full_comp = np.sum(
-            self.optim_coef_matrix
-            * np.log1p(full_tran_sp_matrix / self.optim_sat_array),
-            -1,
-        )
-        # (n_regressor, n_steps + n_adstock, )
-        one_off_comp = np.sum(
-            self.optim_coef_matrix * np.log1p(one_off_sp_matrix / self.optim_sat_array),
-            -1,
-        )
-
-        # (n_regressor, n_steps + n_adstock)
-        attr_matrix = np.exp(self.base_comp) * (
-            -np.exp(one_off_comp) + np.exp(full_comp)
-        )
-
-        # linearization to make decomp additive
-        # (n_steps + n_adstock, )
-        delta_t = np.exp(self.base_comp) * (np.exp(full_comp) - 1)
-        # (n_regressor, n_steps + n_adstock)
-        norm_attr_matrix = attr_matrix / np.sum(attr_matrix, 0, keepdims=True) * delta_t
-
-        # (n_regressor, )
-        revenue = self.ltv_arr * np.sum(norm_attr_matrix, -1)
-
-        # (n_regressor, )
-        cost = np.sum(spend_matrix, 0)
-        net_profit = np.sum(revenue - cost)
-        loss = -1 * net_profit / self.response_scaler
-
-        return loss
-
-    # def objective_func(self, spend):
-    #     spend_matrix = spend.reshape(-1, self.n_optim_channels) * self.spend_scaler
-    #     zero_paddings = np.zeros((self.n_max_adstock, self.n_optim_channels))
-    #     # (n_budget_steps + 2 * n_max_adstock, n_optim_channels)
-    #     spend_matrix = np.concatenate([zero_paddings, spend_matrix, zero_paddings], 0)
-    #     spend_matrix += self.bkg_spend_matrix
-    #     # (n_budget_steps + n_max_adstock, n_optim_channels)
-    #     transformed_spend_matrix = adstock_process(
-    #         spend_matrix, self.optim_adstock_matrix
-    #     )
-    #     # (n_budget_steps + n_max_adstock, n_optim_channels)
-    #     varying_attr_comp = self.optim_coef_matrix * np.log1p(
-    #         transformed_spend_matrix / self.optim_sat_array
-    #     )
-
-    #     # one-on approximation
-    #     # FIXME: one-on does not capture multiplicative effect; not enough
-    #     # base comp does not have the channel dimension so we need expand on last dim
-    #     # (n_budget_steps + n_max_adstock, n_optim_channels)
-    #     attr_matrix = np.exp(np.expand_dims(self.base_comp, -1)) * (
-    #         np.exp(varying_attr_comp) - np.exp(self.bkg_attr_comp)
-    #     )
-    #     # (n_optim_channels, )
-    #     revenue = self.ltv_arr * np.sum(attr_matrix, 0)
-    #     # (n_optim_channels, )
-    #     cost = np.sum(spend_matrix, 0)
-    #     net_profit = np.sum(revenue - cost)
-    #     loss = -1 * net_profit / self.response_scaler
-    #     return loss

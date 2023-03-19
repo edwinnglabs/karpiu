@@ -20,7 +20,7 @@ class FastAttributor(MMMShell):
             [zero_paddings, self.target_regressors_matrix, zero_paddings], axis=0
         )
 
-        # (n_regressors + 1,, n_calc_steps, n_regressors)
+        # (n_regressors + 1, n_calc_steps, n_regressors)
         simulated_regressors_matrix = (
             np.tile(
                 np.expand_dims(simulated_regressors_matrix, 0),
