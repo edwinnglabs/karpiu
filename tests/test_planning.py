@@ -226,16 +226,14 @@ def test_target_maximizer():
     # create different initial spend df and plug back into the model
     new_raw_df = mmm.get_raw_df()
     new_spend_matrix = new_raw_df.loc[
-        (new_raw_df["date"] >= budget_start) &
-        (new_raw_df["date"] <= budget_end),
-        optim_channels
+        (new_raw_df["date"] >= budget_start) & (new_raw_df["date"] <= budget_end),
+        optim_channels,
     ].values
     # mutable numpy array
     np.random.shuffle(new_spend_matrix)
     new_raw_df.loc[
-        (new_raw_df["date"] >= budget_start) &
-        (new_raw_df["date"] <= budget_end),
-        optim_channels
+        (new_raw_df["date"] >= budget_start) & (new_raw_df["date"] <= budget_end),
+        optim_channels,
     ] = new_spend_matrix
     new_mmm = deepcopy(mmm)
     new_mmm.raw_df = new_raw_df
