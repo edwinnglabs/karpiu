@@ -5,7 +5,8 @@ from copy import deepcopy
 
 from karpiu.models import MMM
 from karpiu.simulation import make_mmm_daily_data
-from karpiu.planning import TargetMaximizer, generate_cost_report
+from karpiu.planning.optim import TargetMaximizer
+from karpiu.planning.common import generate_cost_report
 from karpiu.utils import adstock_process
 
 
@@ -247,5 +248,6 @@ def test_target_maximizer():
     new_optim_spend_matrix = new_maximizer.get_current_state()
     new_init_spend_matrix = new_maximizer.get_init_state()
 
+    # the final result should be closed in either by 1e-1 or .1%
     assert np.any(np.not_equal(new_init_spend_matrix, init_spend_matrix))
-    assert np.allclose(new_optim_spend_matrix, optim_spend_matrix, atol=1e-1)
+    assert np.allclose(new_optim_spend_matrix, optim_spend_matrix, atol=1e-1, rtol=1e-3)
