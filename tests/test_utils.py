@@ -32,17 +32,19 @@ def test_np_shift():
 def test_adstock():
     # moving average with each element 4 x 10 times and 3 steps reduced (4 steps on filter)
     input_x = np.full((10, 6), np.arange(0, 6)).astype(float)
-    adstock_filters = np.full((6, 4), 10.)
+    adstock_filters = np.full((6, 4), 10.0)
     output_x = adstock_process(input_x, adstock_filters)
     expected = np.array(
-        [[  0.,  40.,  80., 120., 160., 200.],
-       [  0.,  40.,  80., 120., 160., 200.],
-       [  0.,  40.,  80., 120., 160., 200.],
-       [  0.,  40.,  80., 120., 160., 200.],
-       [  0.,  40.,  80., 120., 160., 200.],
-       [  0.,  40.,  80., 120., 160., 200.],
-       [  0.,  40.,  80., 120., 160., 200.]]
-    ) 
+        [
+            [0.0, 40.0, 80.0, 120.0, 160.0, 200.0],
+            [0.0, 40.0, 80.0, 120.0, 160.0, 200.0],
+            [0.0, 40.0, 80.0, 120.0, 160.0, 200.0],
+            [0.0, 40.0, 80.0, 120.0, 160.0, 200.0],
+            [0.0, 40.0, 80.0, 120.0, 160.0, 200.0],
+            [0.0, 40.0, 80.0, 120.0, 160.0, 200.0],
+            [0.0, 40.0, 80.0, 120.0, 160.0, 200.0],
+        ]
+    )
     assert np.all(np.equal(output_x, expected))
 
     # test batch size - vectorizing scenarios at first dim with same filter
@@ -52,7 +54,7 @@ def test_adstock():
         assert np.all(np.equal(output_x[idx], expected))
 
     # redo this with identical filter
-    # 1 step and 100% weight should mean input is identical to output  
+    # 1 step and 100% weight should mean input is identical to output
     input_x = np.full((10, 6), np.arange(0, 6)).astype(float)
     adstock_filters = np.ones((6, 1))
     output_x = adstock_process(input_x, adstock_filters)

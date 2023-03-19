@@ -45,7 +45,7 @@ class PriorSolver:
             tests_df = self.tests_df.sample(frac=1, ignore_index=True)
         else:
             tests_df = self.tests_df.copy()
-            
+
         output_df = tests_df.copy()
 
         # initialize values
@@ -66,7 +66,7 @@ class PriorSolver:
                 test_channel = row["test_channel"]
                 test_se = row["test_se"]
                 logger.info("test channel:{}".format(test_channel))
-                
+
                 # derive test spend
                 mask = (input_df[date_col] >= test_start) & (
                     input_df[date_col] <= test_end
@@ -75,10 +75,12 @@ class PriorSolver:
                 test_spend = sub_input_df[test_channel].sum()
                 # derive lift from spend data from model to ensure consistency
                 test_lift = test_spend / test_icac
-                if test_lift <=1e-5 or test_spend <= 1e-5:
-                    logger.info("Minimal lift or spend detected of the channel. Skip prior derivation.")
+                if test_lift <= 1e-5 or test_spend <= 1e-5:
+                    logger.info(
+                        "Minimal lift or spend detected of the channel. Skip prior derivation."
+                    )
                     continue
-                
+
                 test_lift_upper = test_spend / (test_icac - test_se)
 
                 # create a callback used for scipy.optimize.fsolve
@@ -114,7 +116,7 @@ class PriorSolver:
                         test_spend, test_lift
                     )
                 )
-                sigma_prior = (coef_prior_upper - coef_prior)
+                sigma_prior = coef_prior_upper - coef_prior
                 sigma_prior = max(sigma_prior, 1e-3)
 
                 logger.info(
@@ -129,7 +131,9 @@ class PriorSolver:
                 output_df.loc[idx, "test_spend"] = test_spend
                 output_df.loc[idx, "test_lift"] = test_lift
 
-            output_df = output_df.loc[np.isfinite(output_df["coef_prior"])].reset_index(drop=True)
+            output_df = output_df.loc[np.isfinite(output_df["coef_prior"])].reset_index(
+                drop=True
+            )
 
             return output_df
 

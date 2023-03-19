@@ -3,6 +3,7 @@ import numpy as np
 from .budget_optimizer import BudgetOptimizer
 from ...utils import adstock_process
 
+
 class TargetMaximizer(BudgetOptimizer):
     """Perform optimization with a given Marketing Mix Model"""
 
@@ -26,4 +27,3 @@ class TargetMaximizer(BudgetOptimizer):
         pred_outcome = np.exp(self.base_comp + spend_comp)
         loss = -1 * np.sum(pred_outcome) / self.response_scaler
         return loss
-
