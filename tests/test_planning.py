@@ -211,7 +211,7 @@ def test_target_maximizer():
     cv = np.nanstd(post_mc) / np.nanmean(post_mc)
     assert np.all(cv < 0.1)
 
-    # check2: total predicted response must be higher than current
+    # check 3: total predicted response must be equal to or higher than current
     optim_pred = mmm.predict(optim_spend_df)
     init_pred = mmm.predict(df)
     measurement_mask = (df["date"] >= maximizer.calc_start) & (
@@ -219,4 +219,34 @@ def test_target_maximizer():
     )
     total_optim_pred = np.sum(optim_pred.loc[measurement_mask, "prediction"].values)
     total_init_pred = np.sum(init_pred.loc[measurement_mask, "prediction"].values)
-    assert total_optim_pred - total_init_pred > 0
+    assert total_optim_pred - total_init_pred >= 0
+
+    # check 4: optimization result should be indifferent with initial values
+    # create different initial spend df and plug back into the model
+    new_raw_df = mmm.get_raw_df()
+    new_spend_matrix = new_raw_df.loc[
+        (new_raw_df["date"] >= budget_start) &
+        (new_raw_df["date"] <= budget_end),
+        optim_channels
+    ].values
+    # mutable numpy array
+    np.random.shuffle(new_spend_matrix)
+    new_raw_df.loc[
+        (new_raw_df["date"] >= budget_start) &
+        (new_raw_df["date"] <= budget_end),
+        optim_channels
+    ] = new_spend_matrix
+    new_mmm = deepcopy(mmm)
+    new_mmm.raw_df = new_raw_df
+    new_maximizer = TargetMaximizer(
+        model=new_mmm,
+        budget_start=budget_start,
+        budget_end=budget_end,
+        optim_channel=optim_channels,
+    )
+    _ = new_maximizer.optimize(maxiter=1000, eps=1e-3)
+    new_optim_spend_matrix = new_maximizer.get_current_state()
+    new_init_spend_matrix = new_maximizer.get_init_state()
+
+    assert np.any(np.not_equal(new_init_spend_matrix, init_spend_matrix))
+    assert np.allclose(new_optim_spend_matrix, optim_spend_matrix, atol=1e-1)

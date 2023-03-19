@@ -3,10 +3,9 @@ import numpy as np
 
 from typing import List, Optional
 
-from ...models import MMM
-from ...utils import adstock_process
-from ...explainability import Attributor
-
+from ..models import MMM
+from ..utils import adstock_process
+from ..explainability import Attributor
 
 def calculate_marginal_cost(
     model: MMM,

@@ -9,7 +9,7 @@ import logging
 
 logger = logging.getLogger("karpiu-planning")
 
-from ...models import MMM
+from ..models import MMM
 
 
 class CostCurves:
