@@ -9,7 +9,7 @@ import math
 from typing import Optional, Dict, Any, Tuple
 
 
-from .explainability import Attributor
+from .explainability.attribution import Attributor
 from .models import MMM
 from .utils import get_logger
 

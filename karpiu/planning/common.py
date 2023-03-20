@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from ..models import MMM
 from ..utils import adstock_process
-from ..explainability import Attributor
+from ..explainability.attribution import Attributor
 
 
 def calculate_marginal_cost(

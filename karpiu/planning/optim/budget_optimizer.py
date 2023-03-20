@@ -6,7 +6,7 @@ import scipy.optimize as optim
 from copy import deepcopy
 
 from ...models import MMM
-from ...explainability import Attributor
+from ...explainability.attribution import Attributor
 
 
 class BudgetOptimizer:

@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from karpiu.models import MMM
 from karpiu.simulation import make_mmm_daily_data
-from karpiu.explainability import Attributor
+from karpiu.explainability.attribution import Attributor
 
 
 @pytest.mark.parametrize(

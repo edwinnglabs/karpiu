@@ -4,7 +4,7 @@ from ...utils import adstock_process
 from .budget_optimizer import BudgetOptimizer
 
 
-class RevenueMaximizer(BudgetOptimizer):
+class NetProfitMaximizer(BudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and
     lift-time values (LTV) per channel
     """
@@ -83,7 +83,7 @@ class RevenueMaximizer(BudgetOptimizer):
         return loss
 
 
-class RevenueMaximizer2(BudgetOptimizer):
+class NetProfitMaximizer2(BudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and
     lift-time values (LTV) per channel
     """

@@ -25,7 +25,7 @@ def adstock_process(
     adstock_matrix: np.array,
 ):
     """Perform 1-D convolution given data matrix and adstock filter matrix
-    regressor_matrix: #-D or 2-D array like with shape (batch_size, n_steps, n_regressors) or (n_steps, n_regressors)
+    regressor_matrix: 3-D or 2-D array like with shape (batch_size, n_steps, n_regressors) or (n_steps, n_regressors)
     adstock_matrix: 2-D array like with shape (n_regressors, n_adstock_weights)
     """
 
