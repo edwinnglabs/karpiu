@@ -125,7 +125,7 @@ class Attributor:
         # organize the dates. This pads the range with the carry over before it starts
         self.calc_start = self.attr_start - pd.Timedelta(days=self.max_adstock)
         self.calc_end = self.attr_end + pd.Timedelta(days=self.max_adstock)
-
+        
         if verbose:
             print(
                 "Full calculation start={} and end={}".format(
@@ -318,19 +318,18 @@ class Attributor:
         # adstock process
         # also need to discard first n(=max_adstock) observation as you cannot observe the correct pred_bau
         # hence last n(=max_adstock) need to be discarded
-        if self.max_adstock > 0:
-            activities_attr_df = pd.DataFrame({
-                date_col: self.df[self.attr_mask][date_col].values
-            }) 
-            activities_attr_df[["organic"] + self.attr_regressors] = activities_attr_matrix
+        activities_attr_df = pd.DataFrame({
+            date_col: self.df[self.attr_mask][date_col].values
+        }) 
+        activities_attr_df[["organic"] + self.attr_regressors] = activities_attr_matrix
 
-            spend_attr_df = pd.DataFrame({
-                date_col: self.df[self.attr_mask][date_col].values
-            }) 
-            spend_attr_df[["organic"] + self.attr_regressors] = spend_attr_matrix
+        spend_attr_df = pd.DataFrame({
+            date_col: self.df[self.attr_mask][date_col].values
+        }) 
+        spend_attr_df[["organic"] + self.attr_regressors] = spend_attr_matrix
 
-            spend_df = self.df.loc[self.attr_mask, [date_col] + self.attr_regressors]
-            spend_df = spend_df.reset_index(drop=True)
+        spend_df = self.df.loc[self.attr_mask, [date_col] + self.attr_regressors]
+        spend_df = spend_df.reset_index(drop=True)
 
         cost_df = spend_df[[date_col]].copy()
         cost_df[self.attr_regressors] = (

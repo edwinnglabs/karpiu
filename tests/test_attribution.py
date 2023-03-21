@@ -4,7 +4,7 @@ import pandas as pd
 
 from karpiu.models import MMM
 from karpiu.simulation import make_mmm_daily_data
-from karpiu.explainability.attribution_not_work import Attributor
+from karpiu.explainability import Attributor
 
 
 @pytest.mark.parametrize(

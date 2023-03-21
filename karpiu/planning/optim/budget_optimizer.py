@@ -5,8 +5,8 @@ import logging
 import scipy.optimize as optim
 from copy import deepcopy
 
-from ...models import MMM
-from ...explainability.attribution_not_work import Attributor
+from karpiu.models import MMM
+from karpiu.explainability  import Attributor
 
 
 class BudgetOptimizer:

@@ -88,7 +88,7 @@ def test_target_maximizer_init(with_events, seasonality, fs_orders):
     )
 
     coef_matrix = maximizer.optim_coef_matrix
-    print(coef_matrix.shape)
+    
     adstock_matrix = maximizer.optim_adstock_matrix
     input_spend_matrix = df.loc[:, channels].values
     input_spend_matrix = input_spend_matrix[maximizer.calc_mask]
