@@ -6,7 +6,7 @@ import scipy.optimize as optim
 from copy import deepcopy
 
 from karpiu.models import MMM
-from karpiu.explainability  import Attributor
+from karpiu.explainability import Attributor
 
 
 class BudgetOptimizer:

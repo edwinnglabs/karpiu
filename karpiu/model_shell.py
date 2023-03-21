@@ -79,7 +79,9 @@ class MMMShell:
             axis=0,
         )
         # (n_input_steps, n_regressors)
-        self.target_regressors_matrix = self.df.loc[self.input_mask, self.target_regressors].values
+        self.target_regressors_matrix = self.df.loc[
+            self.input_mask, self.target_regressors
+        ].values
         self.target_adstock_matrix = model.get_adstock_matrix(self.target_regressors)
         sat_df = model.get_saturation()
         # (n_result_steps, n_regressors)

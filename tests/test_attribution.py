@@ -24,7 +24,7 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [.053, .08, .19, .125, .1]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])

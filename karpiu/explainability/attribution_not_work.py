@@ -22,7 +22,6 @@ from ..model_shell import MMMShell
 #         delta_matrix[:, 0, 0] = self.pred_zero
 
 #         for idx in range(self.n_regressors):
-            
 
 
 # class FastAttributor(MMMShell):
@@ -250,8 +249,12 @@ class Attributor:
                 )
             )
 
-        self.calc_mask = (df[date_col] >= self.calc_start) & (df[date_col] <= self.calc_end)
-        self.attr_mask = (df[date_col] >= self.attr_start) & (df[date_col] <= self.attr_end)
+        self.calc_mask = (df[date_col] >= self.calc_start) & (
+            df[date_col] <= self.calc_end
+        )
+        self.attr_mask = (df[date_col] >= self.attr_start) & (
+            df[date_col] <= self.attr_end
+        )
 
         # set a business-as-usual case data frame
         self.df = df.copy()
@@ -370,7 +373,7 @@ class Attributor:
                 raise Exception(
                     "New coefficient name does not match any regressors in the model."
                 )
-        # TODO: consider update the prediction function such that the shape of the prediction 
+        # TODO: consider update the prediction function such that the shape of the prediction
         # is the same as the input
         # modified coef matrix would impact this prediction vector
         # prediction with full spend in business-as-usual case
@@ -417,9 +420,7 @@ class Attributor:
         # hence last n(=max_adstock) need to be discarded
 
         activities_attr_df = self.df.loc[self.attr_mask, [date_col]]
-        activities_attr_df[
-            ["organic"] + self.attr_regressors
-        ] = activities_attr_matrix
+        activities_attr_df[["organic"] + self.attr_regressors] = activities_attr_matrix
         activities_attr_df = activities_attr_df.reset_index(drop=True)
 
         spend_attr_df = self.df.loc[self.attr_mask, [date_col]]
@@ -451,7 +452,7 @@ class Attributor:
 
         Notes
         -----
-        Assuming n_steps = max_adstock + spend range + 4 * max_adstock; 
+        Assuming n_steps = max_adstock + spend range + 4 * max_adstock;
         where n_steps cover (attr_start - 2 * max_adstock, attr_end + 2 * max_adstock)
 
         Parameters
@@ -482,10 +483,14 @@ class Attributor:
 
         # the first max_adstock steps are consumed to derive the first observed adstock transformed spend
         # (n_steps - max_adstock, max_adstock + 1, n_regressors + 1)
-        delta_matrix = np.empty((n_steps - max_adstock, max_adstock + 1, n_regressors + 1))
+        delta_matrix = np.empty(
+            (n_steps - max_adstock, max_adstock + 1, n_regressors + 1)
+        )
 
         # (n_steps - 3 * max_adstock, max_adstock + 1, n_regressors + 1)
-        paid_on_attr_matrix = np.empty((n_steps -3 * max_adstock, max_adstock + 1, n_regressors + 1))
+        paid_on_attr_matrix = np.empty(
+            (n_steps - 3 * max_adstock, max_adstock + 1, n_regressors + 1)
+        )
 
         # active on can directly take organic as it does not care adstock;
         # hence all impact contribute at first(current) time
@@ -499,7 +504,7 @@ class Attributor:
             # store the delta where row is the time spend is turned off,
             # and column is the subsequent impact from time t (size=adstock + 1)
             # (n_steps -max_adstock, max_adstock + 1)
-            temp_delta_matrix = np.zeros((n_steps -max_adstock, max_adstock + 1))
+            temp_delta_matrix = np.zeros((n_steps - max_adstock, max_adstock + 1))
 
             # (n_steps, )
             temp_bau_regressor = deepcopy(regressor_matrix[:, i])
@@ -527,7 +532,8 @@ class Attributor:
                 if max_adstock > 0:
                     # (n_steps - max_adstock, )
                     temp_attr_regressor_zero = np.squeeze(
-                        adstock_process(temp_attr_regressor_zero, temp_adstock_filter), -1
+                        adstock_process(temp_attr_regressor_zero, temp_adstock_filter),
+                        -1,
                     )
                     # pad zeros; since both bau and set-zero condition yields the same number in the
                     # zero-padding period, the delta ends up to be (constant x (1 - 1 / 1)) =  0
@@ -542,26 +548,31 @@ class Attributor:
                 # measure impact from j to j + max_adstock only
                 # (max_adstock + 1, )
                 # note that coef_matrix already skip the first max_adostock steps
-                coef_array = coef_matrix[(j + max_adstock)  : (j + 2 * max_adstock + 1), i]
+                coef_array = coef_matrix[
+                    (j + max_adstock) : (j + 2 * max_adstock + 1), i
+                ]
 
                 # compute the delta who is the ratio between lift of bau spend and zero spend at time j
                 # (max_adstock + 1, )
                 numerator = (
                     1
-                    + temp_attr_regressor_zero[(j + max_adstock)  : (j + 2 * max_adstock + 1)]
+                    + temp_attr_regressor_zero[
+                        (j + max_adstock) : (j + 2 * max_adstock + 1)
+                    ]
                     / saturation_array[i]
                 ) ** coef_array
                 # (max_adstock + 1, )
                 denominator = (
                     1
-                    + temp_bau_regressor_adstock[(j + max_adstock)  : (j + 2 * max_adstock + 1)]
+                    + temp_bau_regressor_adstock[
+                        (j + max_adstock) : (j + 2 * max_adstock + 1)
+                    ]
                     / saturation_array[i]
                 ) ** coef_array
                 # delta calculation with analytical formula
                 # (max_adstock + 1, )
-                delta = (
-                    pred_bau[(j +  max_adstock): (j + 2 * max_adstock + 1)] 
-                    * (1 - numerator / denominator)
+                delta = pred_bau[(j + max_adstock) : (j + 2 * max_adstock + 1)] * (
+                    1 - numerator / denominator
                 )
                 # the last max_adstock is reserved for downward shifting
                 # (n_steps - max_adstock, max_adstock + 1)
@@ -583,8 +594,8 @@ class Attributor:
             else:
                 delta_matrix[:, :, i + 1] = temp_delta_matrix
 
-        # the first and last max_adstock_steps need to be discarded 
-        # first max_adstock: due to adstock causing non-fully-observed 
+        # the first and last max_adstock_steps need to be discarded
+        # first max_adstock: due to adstock causing non-fully-observed
         # last max_adstock: only the previous is the last one needed; but to keep easier tracking
         # (n_steps - 3 * max_adstock, max_adstock + 1, n_regressors + 1)
         if max_adstock > 0:
@@ -607,7 +618,9 @@ class Attributor:
         # (n_steps - 3 * max_adstock, max_adstock + 1, n_regressors + 1)
         # the covering time is on (attr_start, attr_end + max_adstock)
         # hence, true up array is cut by first 2 max_adstocks and last max_adostocks
-        true_up_arr_reshape = np.expand_dims(true_up_arr[(2 * max_adstock):len(true_up_arr) - max_adstock], (-1, -2))
+        true_up_arr_reshape = np.expand_dims(
+            true_up_arr[(2 * max_adstock) : len(true_up_arr) - max_adstock], (-1, -2)
+        )
         full_attr_matrix = norm_delta_matrix * true_up_arr_reshape
 
         # sum over lags (adstock);
@@ -625,7 +638,8 @@ class Attributor:
         if max_adstock > 0:
             for idx in range(full_attr_matrix.shape[2]):
                 paid_on_attr_matrix[:, :, idx] = np_shift(
-                    full_attr_matrix[:, :, idx], np.arange(0, -1 * (max_adstock + 1), -1)
+                    full_attr_matrix[:, :, idx],
+                    np.arange(0, -1 * (max_adstock + 1), -1),
                 )
             # first adstock steps are not fully observed anyway, so discard them
             useful_paid_on_attr_matrix = paid_on_attr_matrix[max_adstock:, ...]
@@ -638,4 +652,3 @@ class Attributor:
 
         # output delta_matrix mainly for debug
         return activities_attr_matrix, spend_attr_matrix, useful_delta_matrix
-

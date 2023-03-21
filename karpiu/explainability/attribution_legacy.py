@@ -238,11 +238,11 @@ class AttributorLegacy:
             )
 
     def make_attribution(
-            self,
-            new_coef_name: Optional[str] = None,
-            new_coef: Optional[float] = None,
-            true_up: bool = True,
-            debug: bool = False,
+        self,
+        new_coef_name: Optional[str] = None,
+        new_coef: Optional[float] = None,
+        true_up: bool = True,
+        debug: bool = False,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         A general time-based attribution on stat-space model with regression. This is
@@ -427,7 +427,8 @@ class AttributorLegacy:
                 if max_adstock > 0:
                     # (n_steps - max_adstock, )
                     temp_attr_regressor_zero = np.squeeze(
-                        adstock_process(temp_attr_regressor_zero, temp_adstock_filter), -1
+                        adstock_process(temp_attr_regressor_zero, temp_adstock_filter),
+                        -1,
                     )
                     # pad zeros; since both bau and set-zero condition yields the same number in the
                     # zero-padding period, the delta ends up to be (constant x (1 - 1 / 1)) =  0
@@ -458,7 +459,9 @@ class AttributorLegacy:
                     / saturation_array[i]
                 ) ** coef_array
 
-                delta = pred_bau[j : (j + max_adstock + 1)] * (1 - numerator / denominator)
+                delta = pred_bau[j : (j + max_adstock + 1)] * (
+                    1 - numerator / denominator
+                )
                 # (n_steps, max_adstock + 1)
                 temp_delta_matrix[j, 0 : len(delta)] = delta
 
@@ -504,7 +507,8 @@ class AttributorLegacy:
         if max_adstock > 0:
             for idx in range(full_attr_matrix.shape[2]):
                 paid_on_attr_matrix[:, :, idx] = np_shift(
-                    full_attr_matrix[:, :, idx], np.arange(0, -1 * (max_adstock + 1), -1)
+                    full_attr_matrix[:, :, idx],
+                    np.arange(0, -1 * (max_adstock + 1), -1),
                 )
         else:
             paid_on_attr_matrix = deepcopy(full_attr_matrix)
@@ -515,6 +519,7 @@ class AttributorLegacy:
 
         # output norm_delta_matrix mainly for debug
         return activities_attr_matrix, spend_attr_matrix, delta_matrix
+
 
 # deprecated
 # def extract_adstock_matrix(adstock_df, regressor):

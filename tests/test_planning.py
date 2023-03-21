@@ -88,7 +88,7 @@ def test_target_maximizer_init(with_events, seasonality, fs_orders):
     )
 
     coef_matrix = maximizer.optim_coef_matrix
-    
+
     adstock_matrix = maximizer.optim_adstock_matrix
     input_spend_matrix = df.loc[:, channels].values
     input_spend_matrix = input_spend_matrix[maximizer.calc_mask]
@@ -105,7 +105,7 @@ def test_target_maximizer_init(with_events, seasonality, fs_orders):
     transformed_regressors_matrix = np.log1p(
         transformed_regressors_matrix / maximizer.optim_sat_array
     )
-    
+
     reg_comp = np.sum(coef_matrix * transformed_regressors_matrix, axis=-1)
     # from maximizer parameters
     pred_comp_from_optim = np.exp(reg_comp + maximizer.base_comp)
@@ -125,7 +125,7 @@ def test_target_maximizer():
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [.053, .08, .19, .125, .1]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])

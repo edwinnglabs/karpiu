@@ -333,7 +333,7 @@ class Attributor:
 
         cost_df = spend_df[[date_col]].copy()
         cost_df[self.attr_regressors] = (
-            spend_df[self.attr_regressors] / spend_attr_df[self.attr_regressors]
+            spend_df[self.attr_regressors] / spend_at tr_df[self.attr_regressors]
         )
 
         return activities_attr_df, spend_attr_df, spend_df, cost_df
