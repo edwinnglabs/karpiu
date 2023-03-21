@@ -88,21 +88,24 @@ def test_target_maximizer_init(with_events, seasonality, fs_orders):
     )
 
     coef_matrix = maximizer.optim_coef_matrix
+    print(coef_matrix.shape)
     adstock_matrix = maximizer.optim_adstock_matrix
     input_spend_matrix = df.loc[:, channels].values
     input_spend_matrix = input_spend_matrix[maximizer.calc_mask]
     # zero out before and after with adstock periods; add the background spend
     # for testing background spend correctness
-    input_spend_matrix[: maximizer.n_max_adstock] = 0.0
-    input_spend_matrix[-maximizer.n_max_adstock :] = 0.0
+    if maximizer.n_max_adstock > 0:
+        input_spend_matrix[: maximizer.n_max_adstock] = 0.0
+        input_spend_matrix[-maximizer.n_max_adstock :] = 0.0
     input_spend_matrix += maximizer.bkg_spend_matrix
 
     # adstock, log1p, saturation
+    # (n_steps - max_adstock, )
     transformed_regressors_matrix = adstock_process(input_spend_matrix, adstock_matrix)
     transformed_regressors_matrix = np.log1p(
         transformed_regressors_matrix / maximizer.optim_sat_array
     )
-
+    
     reg_comp = np.sum(coef_matrix * transformed_regressors_matrix, axis=-1)
     # from maximizer parameters
     pred_comp_from_optim = np.exp(reg_comp + maximizer.base_comp)
@@ -122,7 +125,7 @@ def test_target_maximizer():
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
+    channels_coef = [.053, .08, .19, .125, .1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -166,6 +169,7 @@ def test_target_maximizer():
     )
     mmm.derive_saturation(df=df, scalability_df=scalability_df)
     mmm.set_hyper_params(params=best_params)
+    # need this 4000/4000 to make sure coefficients are converged
     mmm.fit(df, num_warmup=100, num_sample=100, chains=4)
     budget_start = "2020-01-01"
     budget_end = "2020-01-31"

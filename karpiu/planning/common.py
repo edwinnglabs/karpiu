@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from ..models import MMM
 from ..utils import adstock_process
-from ..explainability.attribution import Attributor
+from ..explainability import Attributor, AttributorLegacy
 
 
 def calculate_marginal_cost(
@@ -105,9 +105,10 @@ def generate_cost_report(
     delta: float = 1e-1,
 ):
     """A wrapper function combining calculation of average and marginal cost in pre and post optimization"""
+    print("I'm here.")
     # report average and marginal cost
     # pre-opt result
-    attr_obj = Attributor(model, attr_regressors=channels, start=start, end=end)
+    attr_obj = AttributorLegacy(model, attr_regressors=channels, start=start, end=end)
     _, spend_attr_df, spend_df, _ = attr_obj.make_attribution()
     tot_attr_df = spend_attr_df[channels].apply(np.sum, axis=0)
     tot_spend_df = spend_df[channels].apply(np.sum, axis=0)
@@ -140,7 +141,7 @@ def generate_cost_report(
     ]
 
     # post-opt result
-    attr_obj = Attributor(
+    attr_obj = AttributorLegacy(
         model, df=post_spend_df, attr_regressors=channels, start=start, end=end
     )
     _, spend_attr_df, spend_df, _ = attr_obj.make_attribution()

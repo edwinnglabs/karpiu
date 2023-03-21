@@ -1,8 +1,10 @@
 import pytest
 import numpy as np
+import pandas as pd
+
 from karpiu.models import MMM
 from karpiu.simulation import make_mmm_daily_data
-from karpiu.explainability.attribution import Attributor
+from karpiu.explainability.attribution_not_work import Attributor
 
 
 @pytest.mark.parametrize(
@@ -22,7 +24,7 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
+    channels_coef = [.053, .08, .19, .125, .1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -62,9 +64,14 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
     )
     mmm.derive_saturation(df=df, scalability_df=scalability_df)
     mmm.set_hyper_params(best_params)
+    # need this 4000/4000 to make sure coefficients are converged
     mmm.fit(df, num_warmup=100, num_sample=100, chains=4)
 
     channels_subsets = (channels, channels[0:2])
+
+    attr_start = "2020-01-01"
+    attr_end = "2020-01-31"
+    duration = (pd.to_datetime(attr_end) - pd.to_datetime(attr_start)).days + 1
 
     for ch_subset in channels_subsets:
         attr_obj = Attributor(
@@ -77,10 +84,11 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
         res = attr_obj.make_attribution()
         activities_attr_df, spend_attr_df, spend_df, cost_df = res
 
-        assert activities_attr_df.shape == spend_attr_df.shape
-        assert spend_attr_df.shape[0] == spend_df.shape[0]
-        assert spend_attr_df.shape[1] - 1 == spend_df.shape[1]
-        assert cost_df.shape[0] == spend_df.shape[0]
+        assert activities_attr_df.shape[0] == duration
+        assert (activities_attr_df.shape[1] - 2) == len(ch_subset)
+        assert spend_attr_df.shape[0] == duration
+        assert (spend_attr_df.shape[1] - 2) == len(ch_subset)
+        assert cost_df.shape[0] == duration
 
         # in no adstock case, activities and spend attribution should be identical
         assert np.all(
@@ -95,8 +103,8 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
     attr_obj = Attributor(
         mmm,
         attr_regressors=channels,
-        start="2020-03-01",
-        end="2020-03-01",
+        start=attr_start,
+        end=attr_end,
     )
     # extract delta matrix
     res = attr_obj.make_attribution(debug=True)
@@ -107,22 +115,22 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
 
     # prediction delta
     full_pred = mmm.predict(df)
-    full_comp = full_pred.loc[full_pred["date"] == "2020-03-01", "prediction"].values
+    full_comp = full_pred.loc[full_pred["date"] == attr_start, "prediction"].values
 
     pred_delta = np.zeros(len(channels) + 1)
     all_off_df = df.copy()
-    all_off_df.loc[all_off_df["date"] == "2020-03-01", channels] = 0.0
+    all_off_df.loc[all_off_df["date"] == attr_start, channels] = 0.0
     all_off_pred = mmm.predict(all_off_df)
     all_off_comp = all_off_pred.loc[
-        all_off_pred["date"] == "2020-03-01", "prediction"
+        all_off_pred["date"] == attr_start, "prediction"
     ].values
     pred_delta[0] = all_off_comp
     for idx, ch in enumerate(channels):
         one_off_df = df.copy()
-        one_off_df.loc[one_off_df["date"] == "2020-03-01", ch] = 0.0
+        one_off_df.loc[one_off_df["date"] == attr_start, ch] = 0.0
         one_off_pred = mmm.predict(one_off_df)
         one_off_comp = one_off_pred.loc[
-            one_off_pred["date"] == "2020-03-01", "prediction"
+            one_off_pred["date"] == attr_start, "prediction"
         ].values
         pred_delta[idx + 1] = full_comp - one_off_comp
 
@@ -200,28 +208,30 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
 
     channels_subsets = (channels, channels[0:2])
 
+    attr_start = "2020-01-01"
+    attr_end = "2020-01-31"
+    duration = (pd.to_datetime(attr_end) - pd.to_datetime(attr_start)).days + 1
+
     for ch_subset in channels_subsets:
         attr_obj = Attributor(
             mmm,
             attr_regressors=ch_subset,
-            start="2020-01-01",
-            end="2020-01-31",
+            start=attr_start,
+            end=attr_end,
         )
 
         res = attr_obj.make_attribution(debug=True)
         delta_matrix = attr_obj.delta_matrix
+
         # after the adstock period, all delta should be finite
         assert np.all(delta_matrix[mmm.get_max_adstock() :, ...] >= 0.0)
         activities_attr_df, spend_attr_df, spend_df, cost_df = res
 
-        assert (
-            activities_attr_df.shape[0]
-            == spend_attr_df.shape[0] + mmm.get_max_adstock()
-        )
-        assert activities_attr_df.shape[1] == spend_attr_df.shape[1]
-        assert spend_attr_df.shape[0] == spend_df.shape[0]
-        assert spend_attr_df.shape[1] - 1 == spend_df.shape[1]
-        assert cost_df.shape[0] == spend_df.shape[0]
+        assert activities_attr_df.shape[0] == duration
+        assert (activities_attr_df.shape[1] - 2) == len(ch_subset)
+        assert spend_attr_df.shape[0] == duration
+        assert (spend_attr_df.shape[1] - 2) == len(ch_subset)
+        assert cost_df.shape[0] == duration
 
     # test different ways to call attribution
     # TODO: parameterize this later

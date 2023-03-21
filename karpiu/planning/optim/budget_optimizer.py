@@ -6,7 +6,7 @@ import scipy.optimize as optim
 from copy import deepcopy
 
 from ...models import MMM
-from ...explainability.attribution import Attributor
+from ...explainability.attribution_not_work import Attributor
 
 
 class BudgetOptimizer:
@@ -101,6 +101,7 @@ class BudgetOptimizer:
         # (n_optim_channels, )
         self.optim_sat_array = attr_obj.attr_sat_array
         # (n_budget_steps + n_max_adstock, n_optim_channels)
+        # this stores from budget start to budget_end + max_adstock coef
         self.optim_coef_matrix = attr_obj.attr_coef_matrix[self.n_max_adstock :]
 
         # store background spend before and after budget period due to adstock
