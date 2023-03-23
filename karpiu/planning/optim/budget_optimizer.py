@@ -6,10 +6,11 @@ import scipy.optimize as optim
 from copy import deepcopy
 
 from karpiu.models import MMM
-from karpiu.explainability import Attributor
+from karpiu.model_shell import MMMShell
+# from karpiu.explainability import Attributor
 
 
-class BudgetOptimizer:
+class BudgetOptimizer(MMMShell):
     """Base class for optimization solution"""
 
     def __init__(
@@ -17,7 +18,7 @@ class BudgetOptimizer:
         model: MMM,
         budget_start: str,
         budget_end: str,
-        optim_channel: str,
+        optim_channels: str,
         response_scaler: float = 1e1,
         spend_scaler: float = 1e4,
         logger: Optional[logging.Logger] = None,
@@ -27,56 +28,70 @@ class BudgetOptimizer:
             self.logger = logging.getLogger("karpiu-planning")
         else:
             self.logger = logger
+        super().__init__(
+            model=model,
+            target_regressors=optim_channels,
+            start=budget_start,
+            end=budget_end,
+        )
 
-        self.df = model.get_raw_df()
-        df = self.df.copy()
-        self.date_col = model.date_col
-        self.budget_start = pd.to_datetime(budget_start)
-        self.budget_end = pd.to_datetime(budget_end)
-        self.optim_channel = optim_channel
-        self.optim_channel.sort()
+        # self.df = model.get_raw_df()
+        # df = self.df.copy()
+        # self.date_col = model.date_col
+        self.budget_start = self.start
+        self.budget_end = self.end
+        self.optim_channels = optim_channels
+        self.optim_channels.sort()
+
         self.logger.info(
             "Optimizing channels is sorted. They are now : {}".format(
-                self.optim_channel
+                self.optim_channels
             )
         )
+
         # TODO: check optim channel is in the model.spend_cols
         self.response_scaler = response_scaler
         self.spend_scaler = spend_scaler
 
         # derive basic attributes
-        self.n_max_adstock = model.get_max_adstock()
-        self.calc_start = self.budget_start - pd.Timedelta(days=self.n_max_adstock)
-        self.calc_end = self.budget_end + pd.Timedelta(days=self.n_max_adstock)
-        self.all_regressor = model.get_regressors()
-        self.event_regressor = model.get_event_cols()
-        self.spend_regressor = model.get_spend_cols()
-        self.non_optim_regressor = list(
-            set(self.all_regressor)
-            - set(self.optim_channel)
-            - set(self.event_regressor)
-        )
+        # self.max_adstock = model.get_max_adstock()
+        # self.calc_start = self.budget_start - pd.Timedelta(days=self.n_max_adstock)
+        # self.calc_end = self.budget_end + pd.Timedelta(days=self.n_max_adstock)
+        # self.all_regressor = model.get_regressors()
+        # self.event_regressor = model.get_event_cols()
+        # self.spend_regressor = model.get_spend_cols()
+        # self.non_optim_regressor = list(
+        #     set(self.all_regressor)
+        #     - set(self.optim_channels)
+        #     - set(self.event_regressor)
+        # )
+        # should be all replaced by Shell
+
         self.constraints = list()
 
         # some masks derivation to extract data with specific periods effectively
-        budget_mask = (df[self.date_col] >= self.budget_start) & (
-            df[self.date_col] <= self.budget_end
-        )
-        self.budget_mask = budget_mask
-        calc_mask = (df[self.date_col] >= self.calc_start) & (
-            df[self.date_col] <= self.calc_end
-        )
-        self.calc_mask = calc_mask
-        self.calc_dt_array = df.loc[calc_mask, self.date_col].values
+        # replaced by input_mask
+        # budget_mask = (df[self.date_col] >= self.budget_start) & (
+        #     df[self.date_col] <= self.budget_end
+        # )
+        # self.budget_mask = budget_mask
+
+        # calc_mask = (df[self.date_col] >= self.calc_start) & (
+        #     df[self.date_col] <= self.calc_end
+        # )
+        # self.calc_mask = calc_mask
+        # self.calc_dt_array = df.loc[calc_mask, self.date_col].values
+
+        self.budget_mask = self.input_mask
 
         # derive optimization input
         # derive init values
         # (n_budget_steps * n_optim_channels, )
-        self.init_spend_matrix = df.loc[budget_mask, self.optim_channel].values
+        self.init_spend_matrix = self.df.loc[self.budget_mask, self.optim_channels].values
         # (n_budget_steps * n_optim_channels, ); this stores current optimal spend
         self.curr_spend_matrix = deepcopy(self.init_spend_matrix)
-        self.n_optim_channels = len(self.optim_channel)
-        n_budget_steps = np.sum(budget_mask)
+        self.n_optim_channels = len(self.optim_channels)
+        n_budget_steps = np.sum(self.input_mask)
         if total_budget_override is not None and total_budget_override > 0:
             self.total_budget = total_budget_override
         else:
@@ -84,31 +99,33 @@ class BudgetOptimizer:
         self.n_budget_steps = n_budget_steps
 
         # leverage Attributor to get base comp and pred_zero (for 1-off approximation)
-        attr_obj = Attributor(
-            model,
-            attr_regressors=optim_channel,
-            start=budget_start,
-            end=budget_end,
-        )
+        # attr_obj = Attributor(
+        #     model,
+        #     attr_regressors=optim_channels,
+        #     start=budget_start,
+        #     end=budget_end,
+        # )
         # (n_budget_steps + n_max_adstock, )
         # base comp includes all components except the optimizing regressors
         # exclude the first n_max_adstock steps as they are not useful
-        self.base_comp = attr_obj.base_comp[self.n_max_adstock :]
+        # self.base_comp = self.base_comp_result.copy()
 
         # store some numpy arrays for channels to be optimized so that it can be
         # used in objective function
-        self.optim_adstock_matrix = attr_obj.attr_adstock_matrix
+        # self.optim_adstock_matrix = attr_obj.attr_adstock_matrix
         # (n_optim_channels, )
-        self.optim_sat_array = attr_obj.attr_sat_array
+        # self.optim_sat_array = attr_obj.attr_sat_array
         # (n_budget_steps + n_max_adstock, n_optim_channels)
         # this stores from budget start to budget_end + max_adstock coef
-        self.optim_coef_matrix = attr_obj.attr_coef_matrix[self.n_max_adstock :]
+        self.optim_coef_matrix = self.target_coef_matrix
 
         # store background spend before and after budget period due to adstock
-        bkg_spend_matrix = df.loc[calc_mask, self.optim_channel].values
+        # bkg_spend_matrix = df.loc[calc_mask, self.optim_channels].values
         # only background spend involved; turn off all spend during budget decision period
-        bkg_spend_matrix[self.n_max_adstock : -self.n_max_adstock, ...] = 0.0
-        self.bkg_spend_matrix = bkg_spend_matrix
+        # bkg_spend_matrix[self.n_max_adstock : -self.n_max_adstock, ...] = 0.0
+        # self.bkg_spend_matrix = bkg_spend_matrix
+        # replaced by 
+        # self.target_regressor_bkg_matrix
 
         total_budget_constraint = self.generate_total_budget_constraint(
             total_budget=self.total_budget
@@ -210,6 +227,6 @@ class BudgetOptimizer:
         )
         optim_spend_matrix = np.round(optim_spend_matrix, 5)
         optim_df = self.get_df()
-        optim_df.loc[self.budget_mask, self.optim_channel] = optim_spend_matrix
+        optim_df.loc[self.budget_mask, self.optim_channels] = optim_spend_matrix
         self.curr_spend_matrix = optim_spend_matrix
         return optim_df
