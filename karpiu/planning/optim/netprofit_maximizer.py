@@ -1,8 +1,6 @@
-# import numpy as np
-
+import numpy as np
 from ...utils import adstock_process
-from .budget_optimizer import BudgetOptimizer
-from typing import Optional
+
 
 from ...explainability.functions import make_attribution_numpy_beta
 from ...utils import adstock_process

@@ -129,11 +129,10 @@ class MMMShell:
 
         # (n_calc_steps, )
         self.base_comp_calc = zero_pred_df.loc[self.calc_mask, "prediction"].values
-
-        # (n_calc_steps, )
-        self.base_comp_calc = zero_pred_df.loc[self.calc_mask, "prediction"].values
         # (n_result_steps, )
         self.base_comp_result = zero_pred_df.loc[self.result_mask, "prediction"].values
+        # (n_input_steps, )
+        self.base_comp_input = zero_pred_df.loc[self.input_mask, "prediction"].values
 
 
     def _define_masks(

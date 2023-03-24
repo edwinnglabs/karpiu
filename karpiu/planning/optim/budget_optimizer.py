@@ -59,7 +59,7 @@ class BudgetOptimizer(MMMShell):
 
         self.logger.info(
             "Optimizing channels is sorted. They are now : {}".format(
-                self.optim_channelss
+                self.optim_channels
             )
         )
 
@@ -106,7 +106,7 @@ class BudgetOptimizer(MMMShell):
         # derive optimization input
         # derive init values
         # (n_budget_steps * n_optim_channels, )
-        self.init_spend_matrix = self.self.df.loc[self.self.budget_mask, self.optim_channelss].values
+        self.init_spend_matrix = self.df.loc[self.budget_mask, self.optim_channels].values
         # (n_budget_steps * n_optim_channels, ); this stores current optimal spend
         self.curr_spend_matrix = deepcopy(self.init_spend_matrix)
         self.n_optim_channels = len(self.optim_channels)
@@ -248,6 +248,6 @@ class BudgetOptimizer(MMMShell):
         )
         optim_spend_matrix = np.round(optim_spend_matrix, 5)
         optim_df = self.get_df()
-        optim_df.loc[self.budget_mask, self.optim_channelss] = optim_spend_matrix
+        optim_df.loc[self.budget_mask, self.optim_channels] = optim_spend_matrix
         self.curr_spend_matrix = optim_spend_matrix
         return optim_df
