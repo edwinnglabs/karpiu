@@ -58,6 +58,8 @@ class MMMShell:
         # (n_result_steps, )
         self.result_dt_array = self.df.loc[self.result_mask, self.date_col].values
         self.calc_dt_array = self.df.loc[self.calc_mask, self.date_col].values
+        self.result_dt_array = self.df.loc[self.result_mask, self.date_col].values
+        self.calc_dt_array = self.df.loc[self.calc_mask, self.date_col].values
 
         # target related
         # make sure target_regressors input by user align original order from model
@@ -123,12 +125,16 @@ class MMMShell:
         df_zero.loc[:, self.target_regressors] = 0.0
         zero_pred_df = model.predict(df=df_zero, decompose=True)
 
+        # prediction when all target regressors are set to zero
+
+        # (n_calc_steps, )
+        self.base_comp_calc = zero_pred_df.loc[self.calc_mask, "prediction"].values
+
         # (n_calc_steps, )
         self.base_comp_calc = zero_pred_df.loc[self.calc_mask, "prediction"].values
         # (n_result_steps, )
         self.base_comp_result = zero_pred_df.loc[self.result_mask, "prediction"].values
-        # (n_input_setps, )
-        self.base_comp_result = zero_pred_df.loc[self.input_mask, "prediction"].values
+
 
     def _define_masks(
         self,

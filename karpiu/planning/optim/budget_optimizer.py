@@ -42,12 +42,27 @@ class BudgetOptimizer(MMMShell):
         self.budget_end = self.end
         self.optim_channels = optim_channels
         self.optim_channels.sort()
+        super().__init__(
+            model=model,
+            target_regressors=optim_channels,
+            start=budget_start,
+            end=budget_end,
+        )
+
+        # self.df = model.get_raw_df()
+        # df = self.df.copy()
+        # self.date_col = model.date_col
+        self.budget_start = self.start
+        self.budget_end = self.end
+        self.optim_channels = optim_channels
+        self.optim_channels.sort()
 
         self.logger.info(
             "Optimizing channels is sorted. They are now : {}".format(
-                self.optim_channels
+                self.optim_channelss
             )
         )
+
 
 
         self.response_scaler = response_scaler
@@ -70,24 +85,28 @@ class BudgetOptimizer(MMMShell):
         self.constraints = list()
 
         # some masks derivation to extract data with specific periods effectively
-        # replaced by input_mask
+        # replaced # replaced by input_mask
+        # by input_mask
         # budget_mask = (df[self.date_col] >= self.budget_start) & (
-        #     df[self.date_col] <= self.budget_end
-        # )
-        # self.budget_mask = budget_mask
+        # #     df[self.date_col] <= self.budget_end
+        # # )
+        # # self.budget_mask = budget_mask
 
-        # calc_mask = (df[self.date_col] >= self.calc_start) & (
-        #     df[self.date_col] <= self.calc_end
-        # )
-        # self.calc_mask = calc_mask
-        # self.calc_dt_array = df.loc[calc_mask, self.date_col].values
+
+        # # calc_mask = (df[self.date_col] >= self.calc_start) & (
+        # #     df[self.date_col] <= self.calc_end
+        # # )
+        # # self.calc_mask = calc_mask
+        # # self.calc_dt_array = df.loc[calc_mask, self.date_col].values
+
+        self.budget_mask = self.input_mask
 
         self.budget_mask = self.input_mask
 
         # derive optimization input
         # derive init values
         # (n_budget_steps * n_optim_channels, )
-        self.init_spend_matrix = self.df.loc[self.budget_mask, self.optim_channels].values
+        self.init_spend_matrix = self.self.df.loc[self.self.budget_mask, self.optim_channelss].values
         # (n_budget_steps * n_optim_channels, ); this stores current optimal spend
         self.curr_spend_matrix = deepcopy(self.init_spend_matrix)
         self.n_optim_channels = len(self.optim_channels)
@@ -99,12 +118,12 @@ class BudgetOptimizer(MMMShell):
         self.n_budget_steps = n_budget_steps
 
         # leverage Attributor to get base comp and pred_zero (for 1-off approximation)
-        # attr_obj = Attributor(
-        #     model,
-        #     attr_regressors=optim_channels,
-        #     start=budget_start,
-        #     end=budget_end,
-        # )
+        # # attr_obj = Attributor(
+        # #     model,
+        # #     attr_regressors=optim_channelss,
+        # #     start=budget_start,
+        # #     end=budget_end,
+        # # )
         # (n_budget_steps + n_max_adstock, )
         # base comp includes all components except the optimizing regressors
         # exclude the first n_max_adstock steps as they are not useful
@@ -112,18 +131,20 @@ class BudgetOptimizer(MMMShell):
 
         # store some numpy arrays for channels to be optimized so that it can be
         # used in objective function
-        # self.optim_adstock_matrix = attr_obj.attr_adstock_matrix
+        # # self.optim_adstock_matrix = attr_obj.attr_adstock_matrix
         # (n_optim_channels, )
-        # self.optim_sat_array = attr_obj.attr_sat_array
+        # # self.optim_sat_array = attr_obj.attr_sat_array
         # (n_budget_steps + n_max_adstock, n_optim_channels)
         # this stores from budget start to budget_end + max_adstock coef
         self.optim_coef_matrix = self.target_coef_matrix
 
         # store background spend before and after budget period due to adstock
-        # bkg_spend_matrix = df.loc[calc_mask, self.optim_channels].values
+        # # bkg_spend_matrix = df.loc[calc_mask, self.optim_channelss].values
         # only background spend involved; turn off all spend during budget decision period
-        # bkg_spend_matrix[self.n_max_adstock : -self.n_max_adstock, ...] = 0.0
-        # self.bkg_spend_matrix = bkg_spend_matrix
+        # # bkg_spend_matrix[self.n_max_adstock : -self.n_max_adstock, ...] = 0.0
+        # # self.bkg_spend_matrix = bkg_spend_matrix
+        # replaced by 
+        # self.target_regressor_bkg_matrix
         # replaced by 
         # self.target_regressor_bkg_matrix
 
@@ -227,6 +248,6 @@ class BudgetOptimizer(MMMShell):
         )
         optim_spend_matrix = np.round(optim_spend_matrix, 5)
         optim_df = self.get_df()
-        optim_df.loc[self.budget_mask, self.optim_channels] = optim_spend_matrix
+        optim_df.loc[self.budget_mask, self.optim_channelss] = optim_spend_matrix
         self.curr_spend_matrix = optim_spend_matrix
         return optim_df
