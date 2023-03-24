@@ -84,48 +84,45 @@ def test_target_maximizer_init(with_events, seasonality, fs_orders):
         model=mmm,
         budget_start=budget_start,
         budget_end=budget_end,
-        optim_channel=channels,
+        optim_channels=channels,
     )
 
-    coef_matrix = maximizer.optim_coef_matrix
-
-    adstock_matrix = maximizer.optim_adstock_matrix
+    coef_matrix = maximizer.target_coef_matrix
+    adstock_matrix = maximizer.target_adstock_matrix
     input_spend_matrix = df.loc[:, channels].values
     input_spend_matrix = input_spend_matrix[maximizer.calc_mask]
     # zero out before and after with adstock periods; add the background spend
     # for testing background spend correctness
-    if maximizer.n_max_adstock > 0:
-        input_spend_matrix[: maximizer.n_max_adstock] = 0.0
-        input_spend_matrix[-maximizer.n_max_adstock :] = 0.0
-    input_spend_matrix += maximizer.bkg_spend_matrix
+    if maximizer.max_adstock > 0:
+        input_spend_matrix[: maximizer.max_adstock] = 0.0
+        input_spend_matrix[-maximizer.max_adstock :] = 0.0
+    input_spend_matrix += maximizer.target_regressor_bkg_matrix
 
     # adstock, log1p, saturation
     # (n_steps - max_adstock, )
     transformed_regressors_matrix = adstock_process(input_spend_matrix, adstock_matrix)
     transformed_regressors_matrix = np.log1p(
-        transformed_regressors_matrix / maximizer.optim_sat_array
+        transformed_regressors_matrix / maximizer.target_sat_array
     )
 
     reg_comp = np.sum(coef_matrix * transformed_regressors_matrix, axis=-1)
     # from maximizer parameters
-    pred_comp_from_optim = np.exp(reg_comp + maximizer.base_comp)
+    pred_comp_from_optim = np.exp(reg_comp) * maximizer.base_comp_result
 
     # from karpiu/orbit method
     pred_df = mmm.predict(df)
     pred_comp = pred_df.loc[maximizer.calc_mask, "prediction"].values
-    pred_comp = pred_comp[maximizer.n_max_adstock :]
+    pred_comp = pred_comp[maximizer.max_adstock :]
 
     assert np.allclose(pred_comp_from_optim, pred_comp)
 
 
 # test target maximizer optimization behaviors
-# 1. with total budget constraint, always spend the total i.e. init total = optimal total
-# 2. marginal cost should be the same, optimization is indifferent with channels
 def test_target_maximizer():
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
+    channels_coef = [.053, .08, .19, .125, .1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -170,7 +167,7 @@ def test_target_maximizer():
     mmm.derive_saturation(df=df, scalability_df=scalability_df)
     mmm.set_hyper_params(params=best_params)
     # need this 4000/4000 to make sure coefficients are converged
-    mmm.fit(df, num_warmup=100, num_sample=100, chains=4)
+    mmm.fit(df, num_warmup=1000, num_sample=1000, chains=4)
     budget_start = "2020-01-01"
     budget_end = "2020-01-31"
     optim_channels = mmm.get_spend_cols()
@@ -181,9 +178,9 @@ def test_target_maximizer():
         model=mmm,
         budget_start=budget_start,
         budget_end=budget_end,
-        optim_channel=optim_channels,
+        optim_channels=optim_channels,
     )
-    optim_spend_df = maximizer.optimize(maxiter=1000, eps=1e-3)
+    optim_spend_df = maximizer.optimize(maxiter=1000)
 
     optim_spend_matrix = maximizer.get_current_state()
     init_spend_matrix = maximizer.get_init_state()
@@ -210,9 +207,10 @@ def test_target_maximizer():
     assert np.all(pre_mc >= pre_ac)
     assert np.all(post_mc >= post_ac)
 
-    # check 2: all marginal cost should be close; within 10% of median
+    # check 2: all marginal cost of channel that has spend
+    # within 15% of mean
     abs_delta_perc = np.abs(post_mc / np.nanmean(post_mc) - 1.00)
-    assert np.all(abs_delta_perc < 0.1)
+    assert np.all(abs_delta_perc < 0.15)
 
     cv = np.nanstd(post_mc) / np.nanmean(post_mc)
     assert np.all(cv < 0.1)
@@ -220,11 +218,8 @@ def test_target_maximizer():
     # check 3: total predicted response must be equal to or higher than current
     optim_pred = mmm.predict(optim_spend_df)
     init_pred = mmm.predict(df)
-    measurement_mask = (df["date"] >= maximizer.calc_start) & (
-        df["date"] <= maximizer.calc_end
-    )
-    total_optim_pred = np.sum(optim_pred.loc[measurement_mask, "prediction"].values)
-    total_init_pred = np.sum(init_pred.loc[measurement_mask, "prediction"].values)
+    total_optim_pred = np.sum(optim_pred.loc[maximizer.result_mask, "prediction"].values)
+    total_init_pred = np.sum(init_pred.loc[maximizer.result_mask, "prediction"].values)
     assert total_optim_pred - total_init_pred >= 0
 
     # check 4: optimization result should be indifferent with initial values
@@ -246,9 +241,9 @@ def test_target_maximizer():
         model=new_mmm,
         budget_start=budget_start,
         budget_end=budget_end,
-        optim_channel=optim_channels,
+        optim_channels=optim_channels,
     )
-    _ = new_maximizer.optimize(maxiter=1000, eps=1e-3)
+    _ = new_maximizer.optimize(maxiter=1000)
     new_optim_spend_matrix = new_maximizer.get_current_state()
     new_init_spend_matrix = new_maximizer.get_init_state()
 

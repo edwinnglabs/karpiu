@@ -1,2 +1,3 @@
-from .netprofit_maximizer import NetProfitMaximizer, NetProfitMaximizer2
 from .target_maximizer import TargetMaximizer
+from .netprofit_maximizer import NetProfitMaximizer
+from .budget_optimizer_legacy import TargetMaximizerLegacy
