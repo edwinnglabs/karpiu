@@ -8,18 +8,18 @@ from ..model_shell import MMMShell
 from ..models import MMM
 from .functions import make_attribution_numpy_beta
 
+
 class AttributorBeta(MMMShell):
     def __init__(
-            self, 
-            model: MMM,
-            attr_regressors: Optional[List[str]] = None,
-            start: Optional[str] = None,
-            end: Optional[str] = None,
-            df: Optional[pd.DataFrame] = None,
-            verbose: bool = False,
-            **kwargs
-        ):
-
+        self,
+        model: MMM,
+        attr_regressors: Optional[List[str]] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        df: Optional[pd.DataFrame] = None,
+        verbose: bool = False,
+        **kwargs
+    ):
         super().__init__(
             model=model,
             target_regressors=attr_regressors,
@@ -32,8 +32,6 @@ class AttributorBeta(MMMShell):
         self.verbose = verbose
         self.attr_start = self.start
         self.attr_end = self.end
-        
-        df = model.raw_df.copy()
 
         # for debug
         self.delta_matrix = None
@@ -52,21 +50,21 @@ class AttributorBeta(MMMShell):
                 )
             )
 
-        if self.calc_start < df[self.date_col].min():
+        if self.calc_start < self.df[self.date_col].min():
             raise Exception(
                 "Dataframe provided starts at {} must be before {} due to max_adstock={}".format(
-                    df[self.date_col].iloc[0], self.calc_start, self.max_adstock
+                    self.df[self.date_col].iloc[0], self.calc_start, self.max_adstock
                 )
             )
 
-        if self.calc_end > df[self.date_col].max():
+        if self.calc_end > self.df[self.date_col].max():
             raise Exception(
                 "Dataframe provided ends at {} must be after {} due to max_adstock={}".format(
-                    df[self.date_col].iloc[-1], self.calc_end, self.max_adstock
+                    self.df[self.date_col].iloc[-1], self.calc_end, self.max_adstock
                 )
             )
-        
-        # dynamic due to coefficient matrix input 
+
+        # dynamic due to coefficient matrix input
         self.pred_bau = None
 
         # adstock_regressor_matrix dim: time x num of regressors
@@ -76,30 +74,34 @@ class AttributorBeta(MMMShell):
                 self.target_calc_regressors_matrix, self.target_adstock_matrix
             )
             # we lose first n(=max_adstock) observations; to maintain original dimension,
-            # we need to pad zeros n(=max_adstock) time; note that they will not be 
+            # we need to pad zeros n(=max_adstock) time; note that they will not be
             # really used; it is for preserving shape
             self.attr_transformed_regressor_matrix = np.concatenate(
                 (
                     np.zeros(
-                        (self.max_adstock, self.attr_transformed_regressor_matrix.shape[1])
+                        (
+                            self.max_adstock,
+                            self.attr_transformed_regressor_matrix.shape[1],
+                        )
                     ),
                     self.attr_transformed_regressor_matrix,
                 ),
                 axis=0,
             )
         else:
-            self.attr_transformed_regressor_matrix = deepcopy(self.target_input_regressors_matrix)
+            self.attr_transformed_regressor_matrix = deepcopy(
+                self.target_input_regressors_matrix
+            )
 
         self.attr_coef_matrix = model.get_coef_matrix(
             date_array=self.calc_dt_array,
             regressors=self.target_regressors,
         )
 
-    # override parent properties    
+    # override parent properties
     def _define_masks(
         self,
     ) -> Tuple[np.array, np.array, np.array]:
-
         # better date operations
         # organize the dates. This pads the range with the carry over before it starts
         calc_start = self.start - pd.Timedelta(days=self.max_adstock)
@@ -118,7 +120,7 @@ class AttributorBeta(MMMShell):
         self.calc_end = calc_end
 
         return input_mask, result_mask, calc_mask
-    
+
     def make_attribution(
         self,
         new_coef_name: Optional[str] = None,
@@ -181,14 +183,16 @@ class AttributorBeta(MMMShell):
         # adstock process
         # also need to discard first n(=max_adstock) observation as you cannot observe the correct pred_bau
         # hence last n(=max_adstock) need to be discarded
-        activities_attr_df = pd.DataFrame({
-            date_col: self.df[self.input_mask][date_col].values
-        }) 
-        activities_attr_df[["organic"] + self.target_regressors] = activities_attr_matrix
+        activities_attr_df = pd.DataFrame(
+            {date_col: self.df[self.input_mask][date_col].values}
+        )
+        activities_attr_df[
+            ["organic"] + self.target_regressors
+        ] = activities_attr_matrix
 
-        spend_attr_df = pd.DataFrame({
-            date_col: self.df[self.input_mask][date_col].values
-        }) 
+        spend_attr_df = pd.DataFrame(
+            {date_col: self.df[self.input_mask][date_col].values}
+        )
         spend_attr_df[["organic"] + self.target_regressors] = spend_attr_matrix
 
         spend_df = self.df.loc[self.input_mask, [date_col] + self.target_regressors]

@@ -17,7 +17,6 @@ class MMMShell:
         end: Optional[str] = None,
         df: Optional[pd.DataFrame] = None,
     ):
-
         if target_regressors is None:
             target_regressors = model.get_spend_cols()
 
@@ -52,9 +51,9 @@ class MMMShell:
             self.end = pd.to_datetime(end)
 
         self.df[self.date_col] = pd.to_datetime(self.df[self.date_col])
-    
+
         self.input_mask, self.result_mask, self.calc_mask = self._define_masks()
-    
+
         # (n_result_steps, )
         self.result_dt_array = self.df.loc[self.result_mask, self.date_col].values
         self.calc_dt_array = self.df.loc[self.calc_mask, self.date_col].values
@@ -134,11 +133,9 @@ class MMMShell:
         # (n_input_steps, )
         self.base_comp_input = zero_pred_df.loc[self.input_mask, "prediction"].values
 
-
     def _define_masks(
         self,
     ) -> Tuple[np.array, np.array, np.array]:
-
         # better date operations
         # organize the dates. This pads the range with the carry over before it starts
         calc_start = self.start - pd.Timedelta(days=self.max_adstock)
@@ -152,7 +149,5 @@ class MMMShell:
         calc_mask = (self.df[self.date_col] >= calc_start) & (
             self.df[self.date_col] <= calc_end
         )
-        
-        return input_mask, result_mask, calc_mask
 
-      
+        return input_mask, result_mask, calc_mask

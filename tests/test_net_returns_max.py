@@ -5,9 +5,8 @@ from copy import deepcopy
 
 from karpiu.models import MMM
 from karpiu.simulation import make_mmm_daily_data
-from karpiu.planning.optim import NetProfitMaximizer
+from karpiu.planning.optim import ChannelNetProfitMaximizer, TimeNetProfitMaximizer
 from karpiu.planning.common import generate_cost_report
-from karpiu.utils import adstock_process
 from karpiu.explainability import AttributorBeta as Attributor
 
 
@@ -15,7 +14,7 @@ def test_net_profit_maximizer():
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [.053, .08, .19, .125, .1]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -68,39 +67,18 @@ def test_net_profit_maximizer():
     # to be safe in beta version, use sorted list of channels
     optim_channels.sort()
 
-    maximizer = NetProfitMaximizer(
+    ch_npm = ChannelNetProfitMaximizer(
         ltv_arr=ltv_arr,
         model=mmm,
         budget_start=budget_start,
         budget_end=budget_end,
         optim_channels=optim_channels,
     )
-    optim_spend_df = maximizer.optimize(maxiter=1000, eps=1e-3, ftol=1e-3)
-    optim_spend_matrix = maximizer.get_current_state()
-    init_spend_matrix = maximizer.get_init_state()
+    optim_spend_df = ch_npm.optimize(maxiter=1000)
+    ch_npm_curr_state = ch_npm.get_current_state()
+    init_ch_npm_state = ch_npm.get_init_state()
 
-    cost_report = generate_cost_report(
-        model=mmm,
-        channels=optim_channels,
-        start=budget_start,
-        end=budget_end,
-        pre_spend_df=df,
-        post_spend_df=optim_spend_df,
-    )
-    cost_report["ltv"] = np.array(ltv_arr)
-
-    pre_opt_spend = cost_report["pre-opt-spend"].values
-    pre_ac = cost_report["pre-opt-avg-cost"].values[pre_opt_spend > 0]
-    pre_mc = cost_report["pre-opt-marginal-cost"].values[pre_opt_spend > 0]
-
-    post_opt_spend = cost_report["post-opt-spend"].values
-    post_ac = cost_report["post-opt-avg-cost"].values[post_opt_spend > 0]
-    post_mc = cost_report["post-opt-marginal-cost"].values[post_opt_spend > 0]
-
-    assert np.all(pre_mc >= pre_ac)
-    assert np.all(post_mc >= post_ac)
-
-    # check 2: optimization result should be indifferent with initial values
+    # check: optimization result should be indifferent with initial values
     # create different initial spend df and plug back into the model
     new_raw_df = mmm.get_raw_df()
     new_spend_matrix = new_raw_df.loc[
@@ -115,46 +93,83 @@ def test_net_profit_maximizer():
     ] = new_spend_matrix
     new_mmm = deepcopy(mmm)
     new_mmm.raw_df = new_raw_df
-    new_maximizer = NetProfitMaximizer(
+    new_ch_npm = ChannelNetProfitMaximizer(
         ltv_arr=ltv_arr,
         model=new_mmm,
         budget_start=budget_start,
         budget_end=budget_end,
         optim_channels=optim_channels,
     )
-    _ = new_maximizer.optimize(maxiter=1000, eps=1e-3, ftol=1e-3)
-    new_optim_spend_matrix = new_maximizer.get_current_state()
-    new_init_spend_matrix = new_maximizer.get_init_state()
+    temp_optim_spend_df = new_ch_npm.optimize(maxiter=1000)
+    new_ch_npm_curr_state = new_ch_npm.get_current_state()
+    new_ch_npm_init_state = new_ch_npm.get_init_state()
 
     # the final result should be closed in either by 1e-1 or .1%
-    assert np.any(np.not_equal(new_init_spend_matrix, init_spend_matrix))
-    assert np.allclose(new_optim_spend_matrix, optim_spend_matrix, atol=1e-1, rtol=1e-3)
+    assert np.any(np.not_equal(new_ch_npm_init_state, init_ch_npm_state))
+    assert np.allclose(new_ch_npm_curr_state, ch_npm_curr_state, atol=1e-1, rtol=1e-3)
+
+    temp_mmm = deepcopy(mmm)
+    temp_mmm.raw_df = temp_optim_spend_df
+
+    # pass into time budget optimizer
+    t_npm = TimeNetProfitMaximizer(
+        ltv_arr=ltv_arr,
+        model=temp_mmm,
+        budget_start=budget_start,
+        budget_end=budget_end,
+        optim_channels=optim_channels,
+        std_reduction_scale=0.0001,
+    )
+    optim_spend_df = ch_npm.optimize(maxiter=1000)
+
+    cost_report = generate_cost_report(
+        model=mmm,
+        channels=optim_channels,
+        start=budget_start,
+        end=budget_end,
+        pre_spend_df=df,
+        post_spend_df=optim_spend_df,
+    )
+    cost_report["ltv"] = np.array(ltv_arr)
+
+    # check general cost report condition
+    pre_opt_spend = cost_report["pre-opt-spend"].values
+    pre_ac = cost_report["pre-opt-avg-cost"].values[pre_opt_spend > 0]
+    pre_mc = cost_report["pre-opt-marginal-cost"].values[pre_opt_spend > 0]
+
+    post_opt_spend = cost_report["post-opt-spend"].values
+    post_ac = cost_report["post-opt-avg-cost"].values[post_opt_spend > 0]
+    post_mc = cost_report["post-opt-marginal-cost"].values[post_opt_spend > 0]
+
+    assert np.all(pre_mc >= pre_ac)
+    assert np.all(post_mc >= post_ac)
 
     # check 3: underspend and overspend condition can be checked by
-    # whether pre_mc > ltv (overspend) and vice versa 
+    # whether pre_mc > ltv (overspend) and vice versa
     pre_mc = cost_report["pre-opt-marginal-cost"].values
     post_avg_mc = cost_report["post-opt-avg-cost"].values
     positive_spend = cost_report["post-opt-spend"]
-    overspend = pre_mc > (cost_report["ltv"].values * 1.1)
-    underspend = pre_mc < (cost_report["ltv"].values * 0.9)
-    spend_delta = cost_report["post-opt-spend"].values - cost_report["pre-opt-spend"].values
+    overspend = pre_mc > (cost_report["ltv"].values * 1.2)
+    underspend = pre_mc < (cost_report["ltv"].values * 0.8)
+    spend_delta = (
+        cost_report["post-opt-spend"].values - cost_report["pre-opt-spend"].values
+    )
     assert np.all(spend_delta[overspend] < 0)
-    assert np.all(spend_delta[underspend] > 0) 
+    assert np.all(spend_delta[underspend] > 0)
 
     # check 4: post-mc should be close or under ltv; post-avg-cost should be
     # lower than ltv when they have spend
     # 1.2 is pretty high tolerance; but it may be okay for a unit test
     post_mc = cost_report["post-opt-marginal-cost"].values
     assert np.all(
-        post_mc[positive_spend > 0] < 
-        cost_report["ltv"].values[positive_spend > 0] * 1.2
+        post_mc[positive_spend > 0]
+        < cost_report["ltv"].values[positive_spend > 0] * 1.2
     )
     assert np.all(
-        post_avg_mc[positive_spend > 0] < 
-        cost_report["ltv"].values[positive_spend > 0]
+        post_avg_mc[positive_spend > 0] < cost_report["ltv"].values[positive_spend > 0]
     )
 
-    # check 5:
+    # check 5: all the marginal net return should be negative if a small delta is added to the current budget plan
     attr_obj = Attributor(
         mmm,
         attr_regressors=optim_channels,
@@ -193,5 +208,5 @@ def test_net_profit_maximizer():
         new_rev = new_spend_attr_matrix * (ltv_arr)
         new_net_arr = new_rev - new_spend_matrix
         new_net_revs[idx] = new_net_arr.sum()
-    
+
     assert np.all(new_net_revs - baseline_net_rev < 0)

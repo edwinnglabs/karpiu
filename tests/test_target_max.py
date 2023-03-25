@@ -122,7 +122,7 @@ def test_target_maximizer():
     # data_args
     seed = 2022
     n_steps = 365 * 3
-    channels_coef = [.053, .08, .19, .125, .1]
+    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
     channels = ["promo", "radio", "search", "social", "tv"]
     features_loc = np.array([2000, 5000, 3850, 3000, 7500])
     features_scale = np.array([550, 2500, 500, 1000, 3500])
@@ -218,7 +218,9 @@ def test_target_maximizer():
     # check 3: total predicted response must be equal to or higher than current
     optim_pred = mmm.predict(optim_spend_df)
     init_pred = mmm.predict(df)
-    total_optim_pred = np.sum(optim_pred.loc[maximizer.result_mask, "prediction"].values)
+    total_optim_pred = np.sum(
+        optim_pred.loc[maximizer.result_mask, "prediction"].values
+    )
     total_init_pred = np.sum(init_pred.loc[maximizer.result_mask, "prediction"].values)
     assert total_optim_pred - total_init_pred >= 0
 

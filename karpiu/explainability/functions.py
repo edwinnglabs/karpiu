@@ -34,7 +34,7 @@ def make_attribution_numpy_beta(
     n_calc_steps, n_attr_reg = attr_regressor_matrix.shape
     max_adstock = adstock_matrix.shape[1] - 1
 
-   # (n_calc_steps, max_adstock + 1, n_attr_reg + 1)
+    # (n_calc_steps, max_adstock + 1, n_attr_reg + 1)
     delta_matrix = np.zeros((n_calc_steps, max_adstock + 1, n_attr_reg + 1))
 
     # a same size of matrix declared to prepare paid date dimension
@@ -42,12 +42,12 @@ def make_attribution_numpy_beta(
     paid_on_attr_matrix = np.zeros(delta_matrix.shape)
 
     # active on can directly take organic as it does not care adstock;
-    # hence all impact contribute at first(current) time 
+    # hence all impact contribute at first(current) time
     # delta_matrix[:, 0, 0] = self.base_comp_calc
     delta_matrix[:, 0, 0] = pred_zero
 
     # TODO: the design matrix and access matrix can be pre-computed
-    
+
     design_matrix = np.ones((n_calc_steps, n_calc_steps))
     np.fill_diagonal(design_matrix, 0.0)
     # (n_calc_steps, n_calc_steps, 1)
@@ -55,47 +55,52 @@ def make_attribution_numpy_beta(
 
     # single row each step
     # (n_calc_steps, 1)
-    access_row_matrix = np.expand_dims(np.arange(n_calc_steps), -1),
+    access_row_matrix = (np.expand_dims(np.arange(n_calc_steps), -1),)
     # (n_calc_steps, max_adstock + 1)
-    access_col_matrix = np.stack([
-        np.arange(x, x + max_adstock + 1) for x in range(n_calc_steps)
-    ])
+    access_col_matrix = np.stack(
+        [np.arange(x, x + max_adstock + 1) for x in range(n_calc_steps)]
+    )
 
     # expand for delta calculation later
-    pred_bau = np.concatenate([
-                    np.expand_dims(pred_bau, -1),
-                    np.zeros((max_adstock, 1)),
-                ], axis=0)
+    pred_bau = np.concatenate(
+        [
+            np.expand_dims(pred_bau, -1),
+            np.zeros((max_adstock, 1)),
+        ],
+        axis=0,
+    )
     # (n_calc_steps, max_adstock + 1)
     pred_bau = np.squeeze(pred_bau[access_col_matrix].copy(), -1)
 
     for idx in range(n_attr_reg):
         # derive the bau regressor matrix
         # (n_calc_steps + max_adstock, 1)
-        temp_bau_transformed_regressor = np.concatenate([
-            deepcopy(attr_transformed_regressor_matrix[:, [idx]]),
-            np.zeros((max_adstock, 1)),
-        ], axis=0)
+        temp_bau_transformed_regressor = np.concatenate(
+            [
+                deepcopy(attr_transformed_regressor_matrix[:, [idx]]),
+                np.zeros((max_adstock, 1)),
+            ],
+            axis=0,
+        )
         # (n_calc_steps, max_adstock + 1)
         temp_bau_transformed_regressor = np.squeeze(
             temp_bau_transformed_regressor[access_col_matrix],
             -1,
         )
         # (n_calc_steps, 1)
-        temp_bau_regressor = deepcopy(
-            attr_regressor_matrix[:, [idx]]
-        )
+        temp_bau_regressor = deepcopy(attr_regressor_matrix[:, [idx]])
         # scenario with spend-off step by step
         # (n_scenarios, n_calc_steps, 1)
-        temp_full_regressor_zero = design_matrix * temp_bau_regressor 
+        temp_full_regressor_zero = design_matrix * temp_bau_regressor
 
         if max_adstock > 0:
             temp_adstock_filter = deepcopy(adstock_matrix[[idx], :])
-            temp_full_regressor_zero = np.squeeze(adstock_process(
-                temp_full_regressor_zero, temp_adstock_filter
-            ))
+            temp_full_regressor_zero = np.squeeze(
+                adstock_process(temp_full_regressor_zero, temp_adstock_filter)
+            )
             # (n_scenarios, n_calc_steps + max_adstock, )
-            temp_full_regressor_zero = np.concatenate([
+            temp_full_regressor_zero = np.concatenate(
+                [
                     np.zeros((n_calc_steps, max_adstock)),
                     temp_full_regressor_zero,
                     # append max_adstock of zeros for access purpose later
@@ -109,42 +114,39 @@ def make_attribution_numpy_beta(
             temp_full_regressor_zero = np.squeeze(temp_full_regressor_zero, -1)
 
         # (n_calc_steps, max_adstock + 1)
-        temp_full_regressor_zero_reduced = np.squeeze(temp_full_regressor_zero[
-            access_row_matrix,
-            access_col_matrix,
-        ], 0)
+        temp_full_regressor_zero_reduced = np.squeeze(
+            temp_full_regressor_zero[
+                access_row_matrix,
+                access_col_matrix,
+            ],
+            0,
+        )
 
         # (n_calc_steps, max_adstock + 1)
         numerator = (
-            1
-            + temp_full_regressor_zero_reduced
-            / attr_saturation_array[idx]
+            1 + temp_full_regressor_zero_reduced / attr_saturation_array[idx]
         ) ** attr_coef_array[idx]
 
         # (n_calc_steps, max_adstock + 1)
         denominator = (
-            1
-            + temp_bau_transformed_regressor
-            / attr_saturation_array[idx]
+            1 + temp_bau_transformed_regressor / attr_saturation_array[idx]
         ) ** attr_coef_array[idx]
 
         # (n_calc_steps, max_adstock + 1)
-        temp_delta_matrix = (
-            pred_bau * (1 - numerator / denominator)
-        )
+        temp_delta_matrix = pred_bau * (1 - numerator / denominator)
 
         # temp delta is the view anchored with spend date for convenient delta
         # calculation; however, they need to be shifted to be anchored with activities
         # date in order to perform normalization; hence, the step below shift
         # down the derived delta to make them aligned at activities date
-        
+
         if max_adstock > 0:
             delta_matrix[:, :, idx + 1] = np_shift(
                 temp_delta_matrix, np.arange(max_adstock + 1)
             )
         else:
             delta_matrix[:, :, idx + 1] = temp_delta_matrix
-        
+
     # (n_steps, 1, 1)
     total_delta = np.sum(delta_matrix, axis=(-1, -2), keepdims=True)
 

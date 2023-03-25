@@ -7,7 +7,6 @@
 # from ..models import MMM
 
 
-
 # class Attributor:
 #     """The class to make attribution on a state-space model in an object-oriented way; Algorithm assumes model is
 #      with a Karpiu and Orbit structure

@@ -126,7 +126,7 @@ class AttributorAlpha:
         # organize the dates. This pads the range with the carry over before it starts
         self.calc_start = self.attr_start - pd.Timedelta(days=self.max_adstock)
         self.calc_end = self.attr_end + pd.Timedelta(days=self.max_adstock)
-        
+
         if verbose:
             print(
                 "Full calculation start={} and end={}".format(
@@ -162,7 +162,7 @@ class AttributorAlpha:
         self.attr_mask = (df[date_col] >= self.attr_start) & (
             df[date_col] <= self.attr_end
         )
-        
+
         self.df = df.copy()
         self.dt_array = df.loc[self.calc_mask, date_col].values
 
@@ -240,11 +240,11 @@ class AttributorAlpha:
             )
 
     def make_attribution(
-            self,
-            new_coef_name: Optional[str] = None,
-            new_coef: Optional[float] = None,
-            true_up: bool = True,
-            debug: bool = False,
+        self,
+        new_coef_name: Optional[str] = None,
+        new_coef: Optional[float] = None,
+        true_up: bool = True,
+        debug: bool = False,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         A general time-based attribution on stat-space model with regression. This is
@@ -317,14 +317,14 @@ class AttributorAlpha:
         # adstock process
         # also need to discard first n(=max_adstock) observation as you cannot observe the correct pred_bau
         # hence last n(=max_adstock) need to be discarded
-        activities_attr_df = pd.DataFrame({
-            date_col: self.df[self.attr_mask][date_col].values
-        }) 
+        activities_attr_df = pd.DataFrame(
+            {date_col: self.df[self.attr_mask][date_col].values}
+        )
         activities_attr_df[["organic"] + self.attr_regressors] = activities_attr_matrix
 
-        spend_attr_df = pd.DataFrame({
-            date_col: self.df[self.attr_mask][date_col].values
-        }) 
+        spend_attr_df = pd.DataFrame(
+            {date_col: self.df[self.attr_mask][date_col].values}
+        )
         spend_attr_df[["organic"] + self.attr_regressors] = spend_attr_matrix
 
         spend_df = self.df.loc[self.attr_mask, [date_col] + self.attr_regressors]
@@ -336,6 +336,3 @@ class AttributorAlpha:
         )
 
         return activities_attr_df, spend_attr_df, spend_df, cost_df
-
-  
-
