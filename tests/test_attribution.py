@@ -81,7 +81,7 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
             end="2020-01-31",
         )
 
-        res = attr_obj.make_attribution()
+        res = attr_obj.make_attribution(fixed_intercept=False)
         activities_attr_df, spend_attr_df, spend_df, cost_df = res
 
         assert activities_attr_df.shape[0] == duration
@@ -107,7 +107,7 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
         end=attr_end,
     )
     # extract delta matrix
-    res = attr_obj.make_attribution(debug=True)
+    res = attr_obj.make_attribution(debug=True, fixed_intercept=False)
     activities_attr_df, spend_attr_df, spend_df, cost_df = res
     delta_matrix = attr_obj.delta_matrix
 
@@ -220,7 +220,7 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
             end=attr_end,
         )
 
-        res = attr_obj.make_attribution(debug=True)
+        res = attr_obj.make_attribution(debug=True, fixed_intercept=False)
         delta_matrix = attr_obj.delta_matrix
 
         # after the adstock period, all delta should be finite
@@ -242,7 +242,7 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
         start="2020-01-01",
         end="2020-01-31",
     )
-    _, _, _, _ = attr_obj.make_attribution()
+    _, _, _, _ = attr_obj.make_attribution(fixed_intercept=False)
     # without regressors specified
     attr_obj = Attributor(
         mmm,
@@ -256,12 +256,12 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
         start="2020-01-01",
         end="2020-01-31",
     )
-    _, _, _, _ = attr_obj.make_attribution()
+    _, _, _, _ = attr_obj.make_attribution(fixed_intercept=False)
     # without date-range specified
     attr_obj = Attributor(
         mmm,
     )
-    _, _, _, _ = attr_obj.make_attribution()
+    _, _, _, _ = attr_obj.make_attribution(fixed_intercept=False)
     # with df specified
     attr_obj = Attributor(
         mmm,
@@ -269,4 +269,4 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
         start="2020-01-01",
         end="2020-01-31",
     )
-    _, _, _, _ = attr_obj.make_attribution()
+    _, _, _, _ = attr_obj.make_attribution(fixed_intercept=False)

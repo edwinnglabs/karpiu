@@ -15,6 +15,7 @@ def make_attribution_numpy_beta(
     adstock_matrix: np.array,
     attr_saturation_array: np.array,
     true_up_arr: np.array,
+    fixed_intercept: bool,
 ) -> Tuple[np.array, np.array, np.array]:
     """A numpy version of making attribution
     Notes
@@ -47,7 +48,6 @@ def make_attribution_numpy_beta(
     delta_matrix[:, 0, 0] = pred_zero
 
     # TODO: the design matrix and access matrix can be pre-computed
-
     design_matrix = np.ones((n_calc_steps, n_calc_steps))
     np.fill_diagonal(design_matrix, 0.0)
     # (n_calc_steps, n_calc_steps, 1)
@@ -147,19 +147,41 @@ def make_attribution_numpy_beta(
         else:
             delta_matrix[:, :, idx + 1] = temp_delta_matrix
 
-    # (n_steps, 1, 1)
-    total_delta = np.sum(delta_matrix, axis=(-1, -2), keepdims=True)
+    if fixed_intercept:
+        # intercept has no adstock
+        true_up_arr_sub = true_up_arr - delta_matrix[:, 0, 0]
+        delta_matrix_sub = delta_matrix[:, :, 1:]
+        # (n_steps, 1, 1)
+        total_delta = np.sum(delta_matrix_sub, axis=(-1, -2), keepdims=True)
+        # remove zeros to avoid divide-by-zero issue
+        index_zero = total_delta == 0
+        total_delta[index_zero] = 1
+        # get the normalized delta
+        # (n_steps, max_adstock + 1, n_regressors + 1)
+        norm_delta_matrix = delta_matrix_sub / total_delta
 
-    # remove zeros to avoid divide-by-zero issue
-    index_zero = total_delta == 0
-    total_delta[index_zero] = 1
+        # (n_steps, max_adstock + 1, n_regressors + 1)
+        full_attr_matrix = np.concatenate(
+            [
+                delta_matrix[:, :, :1],
+                norm_delta_matrix * true_up_arr_sub.reshape(-1, 1, 1),
+            ],
+            axis=-1,
+        )
+    else:
+        # (n_steps, 1, 1)
+        total_delta = np.sum(delta_matrix, axis=(-1, -2), keepdims=True)
 
-    # get the normalized delta
-    # (n_steps, max_adstock + 1, n_regressors + 1)
-    norm_delta_matrix = delta_matrix / total_delta
+        # remove zeros to avoid divide-by-zero issue
+        index_zero = total_delta == 0
+        total_delta[index_zero] = 1
 
-    # (n_steps, max_adstock + 1, n_regressors + 1)
-    full_attr_matrix = norm_delta_matrix * true_up_arr.reshape(-1, 1, 1)
+        # get the normalized delta
+        # (n_steps, max_adstock + 1, n_regressors + 1)
+        norm_delta_matrix = delta_matrix / total_delta
+
+        # (n_steps, max_adstock + 1, n_regressors + 1)
+        full_attr_matrix = norm_delta_matrix * true_up_arr.reshape(-1, 1, 1)
 
     # sum over lags (adstock);
     # (n_steps, n_attr_regressors + 1)

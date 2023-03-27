@@ -5,6 +5,7 @@ from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 from typing import Optional, List, Union, Dict, Literal
 from copy import deepcopy
+from ..explainability import AttributorBeta
 import logging
 
 logger = logging.getLogger("karpiu-planning")
@@ -180,9 +181,19 @@ class CostCurves:
             for m in self.multipliers:
                 temp_df = self.spend_df.copy()
                 temp_df.loc[self.spend_mask, self.channels] = spend_matrix * m
-                pred = self.model.predict(df=temp_df)
+
+                attr_obj = AttributorBeta(
+                    self.model,
+                    df=temp_df,
+                    attr_regressors=self.channels,
+                    start=self.spend_start,
+                    end=self.spend_end,
+                )
+
+                _, spend_attr_df, _, _ = attr_obj.make_attribution(true_up=False)
                 total_spend = np.sum(spend_matrix * m)
-                total_outcome = np.sum(pred.loc[self.outcome_mask, "prediction"].values)
+                total_outcome = np.sum(spend_attr_df.loc[:, self.channels].values)
+
                 cost_curves_dict["ch"].append("overall")
                 cost_curves_dict["total_spend"].append(total_spend)
                 cost_curves_dict["total_outcome"].append(total_outcome)
@@ -198,10 +209,17 @@ class CostCurves:
                     )
                     total_spend = np.sum(temp_df.loc[self.spend_mask, ch].values)
 
-                    pred = self.model.predict(df=temp_df)
-                    total_outcome = np.sum(
-                        pred.loc[self.outcome_mask, "prediction"].values
+                    attr_obj = AttributorBeta(
+                        self.model,
+                        df=temp_df,
+                        attr_regressors=[ch],
+                        start=self.spend_start,
+                        end=self.spend_end,
                     )
+                    _, spend_attr_df, _, _ = attr_obj.make_attribution(true_up=False)
+                    # pred = self.model.predict(df=temp_df)
+
+                    total_outcome = np.sum(spend_attr_df.loc[:, [ch]].values)
                     cost_curves_dict["ch"].append(ch)
                     cost_curves_dict["total_spend"].append(total_spend)
                     cost_curves_dict["total_outcome"].append(total_outcome)

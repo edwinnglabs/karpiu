@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from copy import deepcopy
+import logging
 from typing import Optional, Tuple, List
 
 from ..utils import adstock_process
@@ -17,7 +18,7 @@ class AttributorBeta(MMMShell):
         start: Optional[str] = None,
         end: Optional[str] = None,
         df: Optional[pd.DataFrame] = None,
-        verbose: bool = False,
+        logger: Optional[logging.Logger] = None,
         **kwargs
     ):
         super().__init__(
@@ -29,26 +30,29 @@ class AttributorBeta(MMMShell):
             **kwargs
         )
 
-        self.verbose = verbose
         self.attr_start = self.start
         self.attr_end = self.end
+
+        if logger is None:
+            self.logger = logging.getLogger("karpiu-planning")
+        else:
+            self.logger = logger
 
         # for debug
         self.delta_matrix = None
 
-        if verbose:
-            print(
-                "Full calculation start={} and end={}".format(
-                    self.calc_start.strftime("%Y-%m-%d"),
-                    self.calc_end.strftime("%Y-%m-%d"),
-                )
+        self.logger.info(
+            "Full calculation start={} and end={}".format(
+                self.calc_start.strftime("%Y-%m-%d"),
+                self.calc_end.strftime("%Y-%m-%d"),
             )
-            print(
-                "Attribution start={} and end={}".format(
-                    self.attr_start.strftime("%Y-%m-%d"),
-                    self.attr_end.strftime("%Y-%m-%d"),
-                )
+        )
+        self.logger.info(
+            "Attribution start={} and end={}".format(
+                self.attr_start.strftime("%Y-%m-%d"),
+                self.attr_end.strftime("%Y-%m-%d"),
             )
+        )
 
         if self.calc_start < self.df[self.date_col].min():
             raise Exception(
@@ -126,6 +130,7 @@ class AttributorBeta(MMMShell):
         new_coef_name: Optional[str] = None,
         new_coef: Optional[float] = None,
         true_up: bool = True,
+        fixed_intercept: bool = True,
         debug: bool = False,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         date_col = self.date_col
@@ -155,6 +160,11 @@ class AttributorBeta(MMMShell):
 
         if true_up:
             true_up_array = self.df.loc[self.calc_mask, self.kpi_col].values
+            if fixed_intercept:
+                if np.any(true_up_array < self.base_comp_calc):
+                    raise Exception(
+                        "Fixed intercept is not allowed due to true_up_array < intercept."
+                    )
         else:
             true_up_array = self.pred_bau
 
@@ -171,6 +181,7 @@ class AttributorBeta(MMMShell):
             adstock_matrix=self.target_adstock_matrix,
             attr_saturation_array=self.target_sat_array,
             true_up_arr=true_up_array,
+            fixed_intercept=fixed_intercept,
         )
 
         if debug:

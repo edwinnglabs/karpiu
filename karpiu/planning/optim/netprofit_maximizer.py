@@ -66,6 +66,7 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
             adstock_matrix=self.target_adstock_matrix,
             attr_saturation_array=self.target_sat_array,
             true_up_arr=pred_bau,
+            fixed_intercept=True,
         )
 
         # (n_optim_channels, )
@@ -137,6 +138,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
             adstock_matrix=self.target_adstock_matrix,
             attr_saturation_array=self.target_sat_array,
             true_up_arr=pred_bau,
+            fixed_intercept=True,
         )
 
         # (n_optim_channels, )

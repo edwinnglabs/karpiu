@@ -18,8 +18,8 @@ class BudgetOptimizer(MMMShell):
         budget_start: str,
         budget_end: str,
         optim_channels: str,
-        response_scaler: float = 1e1,
-        spend_scaler: float = 1e4,
+        response_scaler: float = 1.0,
+        spend_scaler: float = 1.0,
         logger: Optional[logging.Logger] = None,
         total_budget_override: Optional[float] = None,
     ):
@@ -142,8 +142,8 @@ class BudgetOptimizer(MMMShell):
         self,
         init: Optional[np.array] = None,
         maxiter: int = 2,
-        eps: float = 1e-03,
-        ftol: float = 1e-07,
+        eps: float = 1e-3,
+        ftol: float = 1e-7,
     ) -> None:
         if init is None:
             x0 = self.init_spend_matrix.flatten() / self.spend_scaler
@@ -278,12 +278,18 @@ class ChannelBudgetOptimizer(MMMShell):
         return df
 
     def get_current_state(self) -> np.array:
+        return deepcopy(self.curr_spend_array)
+
+    def get_current_spend_matrix(self) -> np.array:
         return deepcopy(self.curr_spend_matrix)
 
     def get_total_budget(self) -> float:
         return deepcopy(self.total_budget)
 
     def get_init_state(self) -> np.array:
+        return deepcopy(self.init_spend_array)
+
+    def get_init_spend_matrix(self) -> np.array:
         return deepcopy(self.init_spend_matrix)
 
     def objective_func(self, spend: np.array):
@@ -295,8 +301,8 @@ class ChannelBudgetOptimizer(MMMShell):
         self,
         init: Optional[np.array] = None,
         maxiter: int = 2,
-        eps: float = 1e-03,
-        ftol: float = 1e-03,
+        eps: float = 1e-3,
+        ftol: float = 1e-7,
     ) -> None:
         if init is None:
             x0 = self.init_spend_array / self.spend_scaler
@@ -464,12 +470,18 @@ class TimeBudgetOptimizer(MMMShell):
         return df
 
     def get_current_state(self) -> np.array:
+        return deepcopy(self.curr_spend_array)
+
+    def get_current_spend_matrix(self) -> np.array:
         return deepcopy(self.curr_spend_matrix)
 
     def get_total_budget(self) -> float:
         return deepcopy(self.total_budget)
 
     def get_init_state(self) -> np.array:
+        return deepcopy(self.init_spend_array)
+
+    def get_init_spend_matrix(self) -> np.array:
         return deepcopy(self.init_spend_matrix)
 
     def objective_func(self, spend: np.array):
@@ -481,8 +493,8 @@ class TimeBudgetOptimizer(MMMShell):
         self,
         init: Optional[np.array] = None,
         maxiter: int = 2,
-        eps: float = 1e-03,
-        ftol: float = 1e-03,
+        eps: float = 1e-3,
+        ftol: float = 1e-7,
     ) -> None:
         if init is None:
             x0 = self.init_spend_array / self.spend_scaler

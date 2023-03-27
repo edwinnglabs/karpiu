@@ -218,3 +218,19 @@ def get_logger(name: str) -> logging.Logger:
     if len(logger.handlers) == 0:
         logger = make_info_logger(name)
     return logger
+
+
+def np_shuffle(x: np.array) -> np.array:
+    """A workaround to shuffle multiple dimension with element wise shuffle of numpy array
+
+    Args:
+        x (np.array): input numpy array
+
+    Returns:
+        np.array: shuffled array
+    """
+    new_x = x.flatten().copy()
+    # numpy array is mutable
+    np.random.shuffle(new_x)
+    new_x = new_x.reshape(x.shape)
+    return new_x
