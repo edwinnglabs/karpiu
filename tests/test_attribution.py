@@ -225,7 +225,7 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
 
         # after the adstock period, all delta should be finite
         assert np.all(delta_matrix[mmm.get_max_adstock() :, ...] >= 0.0)
-        activities_attr_df, spend_attr_df, spend_df, cost_df = res
+        activities_attr_df, spend_attr_df, _, cost_df = res
 
         assert activities_attr_df.shape[0] == duration
         assert (activities_attr_df.shape[1] - 2) == len(ch_subset)

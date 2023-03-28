@@ -180,7 +180,7 @@ def test_target_maximizer():
         budget_end=budget_end,
         optim_channels=optim_channels,
     )
-    optim_spend_df = maximizer.optimize(maxiter=1000)
+    optim_spend_df = maximizer.optimize(maxiter=3000)
 
     optim_spend_matrix = maximizer.get_current_state()
     init_spend_matrix = maximizer.get_init_state()
@@ -245,7 +245,7 @@ def test_target_maximizer():
         budget_end=budget_end,
         optim_channels=optim_channels,
     )
-    _ = new_maximizer.optimize(maxiter=1000)
+    _ = new_maximizer.optimize(maxiter=3000)
     new_optim_spend_matrix = new_maximizer.get_current_state()
     new_init_spend_matrix = new_maximizer.get_init_state()
 

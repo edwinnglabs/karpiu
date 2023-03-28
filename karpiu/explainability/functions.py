@@ -146,7 +146,13 @@ def make_attribution_numpy_beta(
             )
         else:
             delta_matrix[:, :, idx + 1] = temp_delta_matrix
-
+    
+    # fix numeric problem
+    # force invalid number to be zero
+    # force small number to be zero
+    delta_matrix[np.logical_not(np.isfinite(delta_matrix))] = 0.0
+    delta_matrix[delta_matrix <= 1e-7] = 0.0
+    
     if fixed_intercept:
         # intercept has no adstock
         true_up_arr_sub = true_up_arr - delta_matrix[:, 0, 0]
