@@ -581,9 +581,9 @@ class MMM:
         # TODO: can make transformation a module
 
         df = df.copy()
-        transform_df = self._preprocess_df(df, transform_response=False)
+        transform_df = self._preprocess_df(df, transform_response=False)    
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
-
+        
         # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [
             x
