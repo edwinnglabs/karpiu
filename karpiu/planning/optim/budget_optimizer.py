@@ -142,7 +142,7 @@ class BudgetOptimizer(MMMShell):
         self,
         init: Optional[np.array] = None,
         maxiter: int = 2,
-        eps: float = 1e-3,
+        eps: Optional[float] = None,
         ftol: float = 1e-7,
     ) -> None:
         if init is None:
@@ -150,18 +150,21 @@ class BudgetOptimizer(MMMShell):
         else:
             x0 = init.flatten() / self.spend_scaler
 
+        options = {
+            "disp": True,
+            "maxiter": maxiter,
+            "ftol": ftol,
+        }
+        if eps is not None:
+            options["eps"] = eps
+
         sol = optim.minimize(
             self.objective_func,
             x0=x0,
             method="SLSQP",
             bounds=self.budget_bounds,
             constraints=self.constraints,
-            options={
-                "disp": True,
-                "maxiter": maxiter,
-                "eps": eps,
-                "ftol": ftol,
-            },
+            options=options,
         )
 
         optim_spend_matrix = (
