@@ -190,7 +190,9 @@ class CostCurves:
                     end=self.spend_end,
                 )
 
-                _, spend_attr_df, _, _ = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+                _, spend_attr_df, _, _ = attr_obj.make_attribution(
+                    true_up=False, fixed_intercept=True
+                )
                 total_spend = np.sum(spend_matrix * m)
                 total_outcome = np.sum(spend_attr_df.loc[:, self.channels].values)
 
@@ -216,7 +218,9 @@ class CostCurves:
                         start=self.spend_start,
                         end=self.spend_end,
                     )
-                    _, spend_attr_df, _, _ = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+                    _, spend_attr_df, _, _ = attr_obj.make_attribution(
+                        true_up=False, fixed_intercept=True
+                    )
                     # pred = self.model.predict(df=temp_df)
 
                     total_outcome = np.sum(spend_attr_df.loc[:, [ch]].values)

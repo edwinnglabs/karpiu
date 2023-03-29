@@ -109,7 +109,9 @@ def generate_cost_report(
     # report average and marginal cost
     # pre-opt result
     attr_obj = AttributorBeta(model, attr_regressors=channels, start=start, end=end)
-    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution(
+        true_up=False, fixed_intercept=True
+    )
     tot_attr_df = spend_attr_df[channels].apply(np.sum, axis=0)
     tot_spend_df = spend_df[channels].apply(np.sum, axis=0)
     avg_cost_df = tot_spend_df / tot_attr_df
@@ -144,7 +146,9 @@ def generate_cost_report(
     attr_obj = AttributorBeta(
         model, df=post_spend_df, attr_regressors=channels, start=start, end=end
     )
-    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution(
+        true_up=False, fixed_intercept=True
+    )
     optim_tot_attr_df = spend_attr_df[channels].apply(np.sum, axis=0)
     optim_tot_spend_df = spend_df[channels].apply(np.sum, axis=0)
     post_avg_cost_df = optim_tot_spend_df / optim_tot_attr_df
