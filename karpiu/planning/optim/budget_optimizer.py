@@ -91,7 +91,8 @@ class BudgetOptimizer(MMMShell):
         self.constraints += constraints
 
     def generate_total_budget_constraint(
-        self, total_budget: float
+        self,
+        total_budget: float
     ) -> optim.LinearConstraint:
         # derive budget constraints based on total sum of init values
         # scipy.optimize.LinearConstraint notation: lb <= A.dot(x) <= ub
