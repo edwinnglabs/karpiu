@@ -189,3 +189,27 @@ def generate_cost_report(
         ]
     ]
     return report
+
+# simulate marginal revenue, cost and net profits
+def simulate_net_profits(
+    model: MMM,
+    channels: List[str],
+    spend_df: pd.DataFrame,
+    budget_start: str,
+    budget_end: str,
+) -> pd.DataFrame:
+    attr_obj = AttributorBeta(
+        model,
+        attr_regressors=channels,
+        start=budget_start,
+        end=budget_end,
+        df=optim_spend_df,
+    )
+    res = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+
+    _, spend_attr_df, spend_df, _ = res
+    base_spend_attr_matrix = np.sum(spend_attr_df[optim_channels].values, 0)
+    base_spend_matrix = np.sum(spend_df[optim_channels].values, 0)
+    base_rev = base_spend_attr_matrix * (ltv_arr)
+    base_net_arr = base_rev - base_spend_matrix
+    baseline_net_rev = base_net_arr.sum()
