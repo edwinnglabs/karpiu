@@ -190,6 +190,7 @@ def generate_cost_report(
     ]
     return report
 
+
 # simulate marginal revenue, cost and net profits
 def simulate_net_profits(
     model: MMM,
