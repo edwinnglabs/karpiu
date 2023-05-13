@@ -394,7 +394,9 @@ class Attributor:
         date_col = self.date_col
         # base df for different report
         # (n_steps, n_channels)
-        df_bau = self.df.loc[self.calc_mask,]
+        df_bau = self.df.loc[
+            self.calc_mask,
+        ]
         df_bau = df_bau.reset_index(drop=True)
 
         # (n_steps, n_attr_regressors)
