@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from copy import deepcopy
 from typing import Optional, Tuple, List
+import logging
 
 from ..utils import adstock_process
 from ..models import MMM
@@ -76,6 +77,11 @@ class AttributorAlpha:
             attr_coef_matrix: the attribution regressor coefficients extracted from the model
             pred_zero: prediction when all attributing regressor are turned off
         """
+        logger = logging.getLogger("karpiu-planning")
+        logger.warning(
+            "This is the Alpha version of attribution class. Be aware this may be deprecated in future version."
+            "For future support, please use the AttributorBeta instead."
+        )
 
         self.date_col = model.date_col
         self.verbose = verbose
