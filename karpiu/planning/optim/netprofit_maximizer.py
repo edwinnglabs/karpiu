@@ -53,7 +53,11 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         pred_bau = self.base_comp_calc * np.exp(varying_comp)
 
         # (n_steps, n_optim_channels)
-        (_, spend_attr_matrix, _,) = make_attribution_numpy_beta(
+        (
+            _,
+            spend_attr_matrix,
+            _,
+        ) = make_attribution_numpy_beta(
             attr_coef_array=self.target_coef_array,
             attr_regressor_matrix=spend_matrix,
             attr_transformed_regressor_matrix=transformed_spend_matrix,
@@ -121,7 +125,11 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         pred_bau = self.base_comp_calc * np.exp(varying_comp)
 
         # (n_steps, n_optim_channels)
-        (_, spend_attr_matrix, _,) = make_attribution_numpy_beta(
+        (
+            _,
+            spend_attr_matrix,
+            _,
+        ) = make_attribution_numpy_beta(
             attr_coef_array=self.target_coef_array,
             attr_regressor_matrix=spend_matrix,
             attr_transformed_regressor_matrix=transformed_spend_matrix,
