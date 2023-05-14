@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from ..models import MMM
 from ..utils import adstock_process
@@ -191,26 +191,80 @@ def generate_cost_report(
     return report
 
 
-# # simulate marginal revenue, cost and net profits
-# def simulate_net_profits(
-#     model: MMM,
-#     channels: List[str],
-#     spend_df: pd.DataFrame,
-#     budget_start: str,
-#     budget_end: str,
-# ) -> pd.DataFrame:
-#     attr_obj = AttributorBeta(
-#         model,
-#         attr_regressors=channels,
-#         start=budget_start,
-#         end=budget_end,
-#         df=optim_spend_df,
-#     )
-#     res = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+# simulate marginal revenue, cost and net profits
+# TODO: right now this is not shown in demo;
+# plan to do it with an example without any budget constraints
+def simulate_net_profits(
+    model: MMM,
+    channels: List[str],
+    spend_df: pd.DataFrame,
+    budget_start: str,
+    budget_end: str,
+    ltv_arr: Union[List[float], np.ndarray],
+    delta: float = 1e-1,
+) -> pd.DataFrame:
+    attr_obj = AttributorBeta(
+        model=model,
+        attr_regressors=channels,
+        start=budget_start,
+        end=budget_end,
+        df=spend_df,
+    )
+    res = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+    date_col = model.date_col
 
-#     _, spend_attr_df, spend_df, _ = res
-#     base_spend_attr_matrix = np.sum(spend_attr_df[optim_channels].values, 0)
-#     base_spend_matrix = np.sum(spend_df[optim_channels].values, 0)
-#     base_rev = base_spend_attr_matrix * (ltv_arr)
-#     base_net_arr = base_rev - base_spend_matrix
-#     baseline_net_rev = base_net_arr.sum()
+    _, baseline_spend_attr_df, baseline_spend_df, _ = res
+    base_tot_attr_arr = np.sum(baseline_spend_attr_df[channels].values, 0)
+    base_spend_arr = np.sum(baseline_spend_df[channels].values, 0)
+    # base_rev = base_tot_attr_arr * (ltv_arr)
+    # base_net_arr = base_rev - base_spend_arr
+
+    input_mask = (spend_df[date_col] >= budget_start) & (
+        spend_df[date_col] <= budget_end
+    )
+
+    entries = list()
+
+    for idx, ch in enumerate(channels):
+        new_spend_df = spend_df.copy()
+        delta_matrix = np.zeros_like(new_spend_df.loc[input_mask, channels])
+        delta_matrix[:, idx] += delta
+        new_spend_df.loc[input_mask, channels] += delta_matrix
+        attr_obj = AttributorBeta(
+            model=model,
+            attr_regressors=channels,
+            start=budget_start,
+            end=budget_end,
+            df=new_spend_df,
+        )
+        res = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+        _, res_spend_attr_df, res_spend_df, _ = res
+        # (n_channels, )
+        res_spend_attr_arr = np.sum(res_spend_attr_df[channels].values, 0)
+        # (n_channels, )
+        new_spend_arr = np.sum(res_spend_df[channels].values, 0)
+        entry = pd.DataFrame(
+            {
+                "target_channel": ch,
+                "channel": channels,
+                "base_spend": base_spend_arr,
+                "new_tot_spend": new_spend_arr,
+                "base_tot_attr": base_tot_attr_arr,
+                "new_tot_attr": res_spend_attr_arr,
+                "ltv": ltv_arr,
+            }
+        )
+        entries.append(entry)
+
+    marginal_attr_df = pd.concat(entries, axis=0)
+    marginal_attr_df["tot_spend_delta"] = (
+        marginal_attr_df["new_tot_spend"] - marginal_attr_df["base_spend"]
+    )
+    marginal_attr_df["tot_attr_delta"] = (
+        marginal_attr_df["new_tot_attr"] - marginal_attr_df["base_tot_attr"]
+    )
+    marginal_attr_df["rev_delta"] = (
+        marginal_attr_df["tot_attr_delta"] * marginal_attr_df["ltv"]
+    )
+
+    return marginal_attr_df

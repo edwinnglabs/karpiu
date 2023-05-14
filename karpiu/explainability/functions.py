@@ -7,16 +7,16 @@ from ..utils import np_shift, adstock_process
 
 
 def make_attribution_numpy_beta(
-    attr_coef_array: np.array,
-    attr_regressor_matrix: np.array,
-    attr_transformed_regressor_matrix: np.array,
-    pred_bau: np.array,
-    pred_zero: np.array,
-    adstock_matrix: np.array,
-    attr_saturation_array: np.array,
-    true_up_arr: np.array,
+    attr_coef_array: np.ndarray,
+    attr_regressor_matrix: np.ndarray,
+    attr_transformed_regressor_matrix: np.ndarray,
+    pred_bau: np.ndarray,
+    pred_zero: np.ndarray,
+    adstock_matrix: np.ndarray,
+    attr_saturation_array: np.ndarray,
+    true_up_arr: np.ndarray,
     fixed_intercept: bool,
-) -> Tuple[np.array, np.array, np.array]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """A numpy version of making attribution
     Notes
     -----
@@ -219,15 +219,15 @@ def make_attribution_numpy_beta(
 
 
 def make_attribution_numpy_alpha(
-    coef_matrix: np.array,
-    regressor_matrix: np.array,
-    adstock_regressor_matrix: np.array,
-    pred_bau: np.array,
-    pred_zero: np.array,
-    adstock_matrix: np.array,
-    saturation_array: np.array,
-    true_up_arr: np.array,
-) -> Tuple[np.array, np.array, np.array]:
+    coef_matrix: np.ndarray,
+    regressor_matrix: np.ndarray,
+    adstock_regressor_matrix: np.ndarray,
+    pred_bau: np.ndarray,
+    pred_zero: np.ndarray,
+    adstock_matrix: np.ndarray,
+    saturation_array: np.ndarray,
+    true_up_arr: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """A numpy version of making attribution
     Notes
     -----

@@ -105,7 +105,7 @@ class AttributorBeta(MMMShell):
     # override parent properties
     def _define_masks(
         self,
-    ) -> Tuple[np.array, np.array, np.array]:
+    ) -> Tuple[np.ndarray, np.array, np.array]:
         # better date operations
         # organize the dates. This pads the range with the carry over before it starts
         calc_start = self.start - pd.Timedelta(days=self.max_adstock)

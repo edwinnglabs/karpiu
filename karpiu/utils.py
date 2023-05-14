@@ -14,15 +14,15 @@ from functools import reduce
 from typing import List, Dict, Any, Optional
 
 
-def non_zero_quantile(x: np.array, q=0.75):
+def non_zero_quantile(x: np.ndarray, q=0.75):
     assert len(x.shape) == 1
     new_x = x[x > 0]
     return np.quantile(new_x, q=q)
 
 
 def adstock_process(
-    regressor_matrix: np.array,
-    adstock_matrix: np.array,
+    regressor_matrix: np.ndarray,
+    adstock_matrix: np.ndarray,
 ):
     """Perform 1-D convolution given data matrix and adstock filter matrix
     regressor_matrix: 3-D or 2-D array like with shape (batch_size, n_steps, n_regressors) or (n_steps, n_regressors)
@@ -169,7 +169,7 @@ def expand_grid(dictionary: Dict[str, Any]):
     )
 
 
-def generate_posteriors_mode(posteriors: Dict[str, np.array], var_names: str):
+def generate_posteriors_mode(posteriors: Dict[str, np.ndarray], var_names: str):
     posteriors_mode = {}
     for k, v in posteriors.items():
         if k in var_names:
@@ -220,14 +220,14 @@ def get_logger(name: str) -> logging.Logger:
     return logger
 
 
-def np_shuffle(x: np.array) -> np.array:
+def np_shuffle(x: np.ndarray) -> np.ndarray:
     """A workaround to shuffle multiple dimension with element wise shuffle of numpy array
 
     Args:
-        x (np.array): input numpy array
+        x (np.ndarray): input numpy array
 
     Returns:
-        np.array: shuffled array
+        np.ndarray: shuffled array
     """
     new_x = x.flatten().copy()
     # numpy array is mutable

@@ -124,13 +124,13 @@ class BudgetOptimizer(MMMShell):
         df = self.df.copy()
         return df
 
-    def get_current_state(self) -> np.array:
+    def get_current_state(self) -> np.ndarray:
         return deepcopy(self.curr_spend_matrix)
 
     def get_total_budget(self) -> float:
         return deepcopy(self.total_budget)
 
-    def get_init_state(self) -> np.array:
+    def get_init_state(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
     def objective_func(self, spend):
@@ -140,7 +140,7 @@ class BudgetOptimizer(MMMShell):
 
     def optimize(
         self,
-        init: Optional[np.array] = None,
+        init: Optional[np.ndarray] = None,
         maxiter: int = 2,
         eps: Optional[float] = None,
         ftol: float = 1e-7,
@@ -190,7 +190,7 @@ class ChannelBudgetOptimizer(MMMShell):
         spend_scaler: float = 1.0,
         logger: Optional[logging.Logger] = None,
         total_budget_override: Optional[float] = None,
-        weight: Optional[np.array] = None,
+        weight: Optional[np.ndarray] = None,
     ):
         if logger is None:
             self.logger = logging.getLogger("karpiu-planning")
@@ -280,29 +280,29 @@ class ChannelBudgetOptimizer(MMMShell):
         df = self.df.copy()
         return df
 
-    def get_current_state(self) -> np.array:
+    def get_current_state(self) -> np.ndarray:
         return deepcopy(self.curr_spend_array)
 
-    def get_current_spend_matrix(self) -> np.array:
+    def get_current_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.curr_spend_matrix)
 
     def get_total_budget(self) -> float:
         return deepcopy(self.total_budget)
 
-    def get_init_state(self) -> np.array:
+    def get_init_state(self) -> np.ndarray:
         return deepcopy(self.init_spend_array)
 
-    def get_init_spend_matrix(self) -> np.array:
+    def get_init_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend: np.array):
+    def objective_func(self, spend: np.ndarray):
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
 
     def optimize(
         self,
-        init: Optional[np.array] = None,
+        init: Optional[np.ndarray] = None,
         maxiter: int = 2,
         eps: float = 1e-3,
         ftol: float = 1e-7,
@@ -359,7 +359,7 @@ class TimeBudgetOptimizer(MMMShell):
         spend_scaler: float = 1.0,
         logger: Optional[logging.Logger] = None,
         total_budget_override: Optional[float] = None,
-        weight: Optional[np.array] = None,
+        weight: Optional[np.ndarray] = None,
         # additional optim config
         lb_ratio: float = 0.05,
         ub_ratio: float = 5.0,
@@ -472,29 +472,29 @@ class TimeBudgetOptimizer(MMMShell):
         df = self.df.copy()
         return df
 
-    def get_current_state(self) -> np.array:
+    def get_current_state(self) -> np.ndarray:
         return deepcopy(self.curr_spend_array)
 
-    def get_current_spend_matrix(self) -> np.array:
+    def get_current_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.curr_spend_matrix)
 
     def get_total_budget(self) -> float:
         return deepcopy(self.total_budget)
 
-    def get_init_state(self) -> np.array:
+    def get_init_state(self) -> np.ndarray:
         return deepcopy(self.init_spend_array)
 
-    def get_init_spend_matrix(self) -> np.array:
+    def get_init_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend: np.array):
+    def objective_func(self, spend: np.ndarray):
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
 
     def optimize(
         self,
-        init: Optional[np.array] = None,
+        init: Optional[np.ndarray] = None,
         maxiter: int = 2,
         eps: float = 1e-3,
         ftol: float = 1e-7,
