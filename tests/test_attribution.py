@@ -9,7 +9,7 @@ from karpiu.explainability import AttributorBeta
 def test_wo_attribution():
     with open("./tests/resources/simple-model.pkl", "rb") as f:
         mmm = pickle.load(f)
-    
+
     df = mmm.get_raw_df()
     channels = mmm.get_spend_cols()
     channels_subsets = (channels, channels[0:2])

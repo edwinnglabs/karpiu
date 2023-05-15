@@ -11,7 +11,7 @@ from karpiu.utils import np_shuffle
 def test_net_profit_maximizer():
     with open("./tests/resources/seasonal-model.pkl", "rb") as f:
         mmm = pickle.load(f)
-    
+
     ltv_arr = [48.5, 52.5, 38.6, 35.8, 60.8]
     df = mmm.get_raw_df()
 

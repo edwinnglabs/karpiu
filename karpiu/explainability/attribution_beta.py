@@ -136,10 +136,10 @@ class AttributorBeta(MMMShell):
         """_summary_
 
         Args:
-            new_coef_name (Optional[str], optional): Optional. If supplied, it also requires the new_coef to be 
+            new_coef_name (Optional[str], optional): Optional. If supplied, it also requires the new_coef to be
             supplied with the same length to replace to existing regression coefficients of the model in performing
             attribution
-            new_coef (Optional[float], optional): _description_. Defaults to None. If supplied, it will be used to 
+            new_coef (Optional[float], optional): _description_. Defaults to None. If supplied, it will be used to
             replace to existing regression coefficients of the model in performing attribution
             true_up (bool, optional): _description_. Defaults to True. If true, the final attribution total will be
             true-up with the original observed response.
