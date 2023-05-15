@@ -4,6 +4,7 @@ from karpiu.models import MMM
 from karpiu.simulation import make_mmm_daily_data
 import os
 
+
 # this is a test to be run to create core models for tests such as attribution, optimization, ... etc.
 def test_create_core_models():
     # the simplest proof-of-concept case without adstock, events and seasonality.
@@ -43,6 +44,7 @@ def test_create_core_models():
     mmm.fit(df, num_warmup=1000, num_sample=1000, chains=4)
 
     if not os.path.exists("./tests/resources"):
+        print("Creating resources folder...")
         os.makedirs("./tests/resources")
 
     print("Dumping simple-model.pkl...")
