@@ -683,7 +683,7 @@ class MMM:
     def get_adstock_matrix(
         self,
         spend_cols: Optional[List[str]] = None,
-    ) -> np.array:
+    ) -> np.ndarray:
         if spend_cols is None:
             spend_cols = self.get_spend_cols()
 
@@ -727,7 +727,7 @@ class MMM:
     def get_coef_vector(
         self,
         regressors: Optional[List[str]] = None,
-    ) -> np.array:
+    ) -> np.ndarray:
         coef_df = self._model.get_regression_coefs()
         coef_df = coef_df.set_index("regressor")
         if regressors is not None:
@@ -738,9 +738,9 @@ class MMM:
 
     def get_coef_matrix(
         self,
-        date_array: np.array,
+        date_array: np.ndarray,
         regressors: Optional[List[str]] = None,
-    ) -> np.array:
+    ) -> np.ndarray:
         """Right now we ignore date_array since this is static coef. model
         Args:
             date_array: user supplied date array for the regressors; right now this is dummy and just used for
@@ -767,7 +767,7 @@ class MMM:
     def get_saturation_vector(
         self,
         regressors: Optional[List[str]] = None,
-    ) -> np.array:
+    ) -> np.ndarray:
         sat_df = self.get_saturation()
         if regressors is not None:
             sat_array = sat_df.loc[regressors, "saturation"].values

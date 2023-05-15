@@ -9,7 +9,7 @@ import math
 from typing import Optional, Dict, Any, Tuple
 
 
-from .explainability import Attributor
+from .explainability import AttributorBeta
 from .models import MMM
 from .utils import get_logger
 
@@ -26,6 +26,7 @@ class PriorSolver:
         shuffle: bool = False,
         debug: bool = False,
         logger: Optional[logging.Logger] = None,
+        fixed_intercept: bool = False,
     ) -> pd.DataFrame:
         """Solving priors independently (and sequentially) based on each coefficients loc and scale input.
 
@@ -65,7 +66,7 @@ class PriorSolver:
                 test_icac = row["test_icac"]
                 test_channel = row["test_channel"]
                 test_se = row["test_se"]
-                logger.info("test channel:{}".format(test_channel))
+                self.logger.info("test channel:{}".format(test_channel))
 
                 # derive test spend
                 mask = (input_df[date_col] >= test_start) & (
@@ -76,7 +77,7 @@ class PriorSolver:
                 # derive lift from spend data from model to ensure consistency
                 test_lift = test_spend / test_icac
                 if test_lift <= 1e-5 or test_spend <= 1e-5:
-                    logger.info(
+                    self.logger.info(
                         "Minimal lift or spend detected of the channel. Skip prior derivation."
                     )
                     continue
@@ -84,13 +85,14 @@ class PriorSolver:
                 test_lift_upper = test_spend / (test_icac - test_se)
 
                 # create a callback used for scipy.optimize.fsolve
-                attr_obj = Attributor(model, start=test_start, end=test_end)
+                attr_obj = AttributorBeta(model, start=test_start, end=test_end)
 
                 def attr_call_back(x, target):
                     attr_res = attr_obj.make_attribution(
                         new_coef_name=test_channel,
                         new_coef=x,
                         true_up=True,
+                        fixed_intercept=fixed_intercept,
                     )
                     _, spend_attr_df, _, _ = attr_res
                     mask = (spend_attr_df[date_col] >= test_start) & (
@@ -111,7 +113,7 @@ class PriorSolver:
                     x0=init_search_pt,
                     args=test_lift_upper,
                 )[0]
-                logger.info(
+                self.logger.info(
                     "test spend: {:.3f}, test lift: {:.3f}".format(
                         test_spend, test_lift
                     )
@@ -119,7 +121,7 @@ class PriorSolver:
                 sigma_prior = coef_prior_upper - coef_prior
                 sigma_prior = max(sigma_prior, 1e-3)
 
-                logger.info(
+                self.logger.info(
                     "coef prior: {:.3f}, sigma prior: {:.3f}".format(
                         coef_prior, sigma_prior
                     )
@@ -304,8 +306,8 @@ def calibrate_model_with_test(
                 if test_channel not in tests_df["test_channel"].values:
                     continue
 
-                attr_obj = Attributor(new_model, start=test_start, end=test_end)
-                attr_res = attr_obj.make_attribution()
+                attr_obj = AttributorBeta(new_model, start=test_start, end=test_end)
+                attr_res = attr_obj.make_attribution(fixed_intercept=False)
                 _, spend_attr_df, _, _ = attr_res
                 mask = (spend_attr_df[date_col] >= test_start) & (
                     spend_attr_df[date_col] <= test_end
