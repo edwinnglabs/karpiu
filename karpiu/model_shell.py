@@ -135,7 +135,7 @@ class MMMShell:
 
     def _define_masks(
         self,
-    ) -> Tuple[np.array, np.array, np.array]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         # better date operations
         # organize the dates. This pads the range with the carry over before it starts
         calc_start = self.start - pd.Timedelta(days=self.max_adstock)

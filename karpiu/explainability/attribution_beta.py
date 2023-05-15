@@ -105,7 +105,7 @@ class AttributorBeta(MMMShell):
     # override parent properties
     def _define_masks(
         self,
-    ) -> Tuple[np.ndarray, np.array, np.array]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         # better date operations
         # organize the dates. This pads the range with the carry over before it starts
         calc_start = self.start - pd.Timedelta(days=self.max_adstock)
@@ -133,6 +133,24 @@ class AttributorBeta(MMMShell):
         fixed_intercept: bool = True,
         debug: bool = False,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """_summary_
+
+        Args:
+            new_coef_name (Optional[str], optional): Optional. If supplied, it also requires the new_coef to be 
+            supplied with the same length to replace to existing regression coefficients of the model in performing
+            attribution
+            new_coef (Optional[float], optional): _description_. Defaults to None. If supplied, it will be used to 
+            replace to existing regression coefficients of the model in performing attribution
+            true_up (bool, optional): _description_. Defaults to True. If true, the final attribution total will be
+            true-up with the original observed response.
+            fixed_intercept (bool, optional): _description_. Defaults to True. If true, intercept estimate will not be
+            involved in the linearization process with other channels raw-attribution. It will be forced to turn-off if
+            it violates the condition of true-up response < intercept.
+            debug (bool, optional): _description_. Defaults to False. Logic to turn on debug statements.
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]: attribution result
+        """
         date_col = self.date_col
 
         # (n_attr_regressors, )

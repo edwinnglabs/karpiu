@@ -1,10 +1,7 @@
-import pytest
 import numpy as np
-import pandas as pd
 from copy import deepcopy
+import pickle
 
-from karpiu.models import MMM
-from karpiu.simulation import make_mmm_daily_data
 from karpiu.planning.optim import ChannelNetProfitMaximizer, TimeNetProfitMaximizer
 from karpiu.planning.common import generate_cost_report
 from karpiu.explainability import AttributorBeta as Attributor
@@ -12,56 +9,12 @@ from karpiu.utils import np_shuffle
 
 
 def test_net_profit_maximizer():
-    # data_args
-    seed = 2022
-    n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
-    channels = ["promo", "radio", "search", "social", "tv"]
-    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
-    features_scale = np.array([550, 2500, 500, 1000, 3500])
-    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
-    start_date = "2019-01-01"
-    adstock_args = {
-        "n_steps": 28,
-        "peak_step": np.array([10, 8, 5, 3, 2]),
-        "left_growth": np.array([0.05, 0.08, 0.1, 0.5, 0.75]),
-        "right_growth": np.array([-0.03, -0.6, -0.5, -0.1, -0.25]),
-    }
-    best_params = {
-        "damped_factor": 0.9057,
-        "level_sm_input": 0.00245,
-    }
+    with open("./tests/resources/seasonal-model.pkl", "rb") as f:
+        mmm = pickle.load(f)
+    
     ltv_arr = [48.5, 52.5, 38.6, 35.8, 60.8]
-    np.random.seed(seed)
+    df = mmm.get_raw_df()
 
-    df, scalability_df, adstock_df, event_cols = make_mmm_daily_data(
-        channels_coef=channels_coef,
-        channels=channels,
-        features_loc=features_loc,
-        features_scale=features_scale,
-        scalability=scalability,
-        n_steps=n_steps,
-        start_date=start_date,
-        adstock_args=adstock_args,
-        with_yearly_seasonality=True,
-        with_weekly_seasonality=True,
-        country="US",
-    )
-
-    mmm = MMM(
-        kpi_col="sales",
-        date_col="date",
-        spend_cols=channels,
-        event_cols=event_cols,
-        seed=seed,
-        adstock_df=adstock_df,
-        seasonality=[7, 365.25],
-        fs_orders=[2, 3],
-    )
-    mmm.derive_saturation(df=df, scalability_df=scalability_df)
-    mmm.set_hyper_params(params=best_params)
-    # need this 4000/4000 to make sure coefficients are converged
-    mmm.fit(df, num_warmup=4000, num_sample=4000, chains=4)
     budget_start = "2020-01-01"
     budget_end = "2020-01-31"
     optim_channels = mmm.get_spend_cols()

@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import pandas as pd
+import pickle
 from copy import deepcopy
 
 from karpiu.models import MMM
@@ -10,72 +10,20 @@ from karpiu.planning.common import generate_cost_report
 from karpiu.utils import adstock_process
 
 
-# test the inner numpy style prediction is the same as the prediction from model object
 @pytest.mark.parametrize(
-    "with_events",
-    [True, False],
-    ids=["w_events", "wo_events"],
-)
-@pytest.mark.parametrize(
-    "seasonality, fs_orders",
+    "model_path",
     [
-        ([365.25], [3]),
-        (None, None),
+        "./tests/resources/seasonal-model.pkl",
+        "./tests/resources/non-seasonal-model.pkl",
     ],
-    ids=["w_seasonality", "wo_seasonality"],
+    ids=["full_case", "wo_seasonality_and_events"],
 )
-def test_target_maximizer_init(with_events, seasonality, fs_orders):
-    # data_args
-    seed = 2022
-    n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
-    channels = ["promo", "radio", "search", "social", "tv"]
-    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
-    features_scale = np.array([550, 2500, 500, 1000, 3500])
-    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
-    start_date = "2019-01-01"
-    adstock_args = {
-        "n_steps": 28,
-        "peak_step": np.array([10, 8, 5, 3, 2]),
-        "left_growth": np.array([0.05, 0.08, 0.1, 0.5, 0.75]),
-        "right_growth": np.array([-0.03, -0.6, -0.5, -0.1, -0.25]),
-    }
-    best_params = {
-        "damped_factor": 0.9057,
-        "level_sm_input": 0.00245,
-    }
-    np.random.seed(seed)
+def test_target_maximizer_init(model_path):
+    with open(model_path, "rb") as f:
+        mmm = pickle.load(f)
 
-    with_yearly_seasonality = False
-    if seasonality is not None and len(seasonality) > 0:
-        with_yearly_seasonality = True
-
-    df, scalability_df, adstock_df, event_cols = make_mmm_daily_data(
-        channels_coef=channels_coef,
-        channels=channels,
-        features_loc=features_loc,
-        features_scale=features_scale,
-        scalability=scalability,
-        n_steps=n_steps,
-        start_date=start_date,
-        adstock_args=adstock_args,
-        with_yearly_seasonality=with_yearly_seasonality,
-        country="US" if with_events else None,
-    )
-    mmm = MMM(
-        kpi_col="sales",
-        date_col="date",
-        spend_cols=channels,
-        event_cols=event_cols,
-        seed=seed,
-        adstock_df=adstock_df,
-        seasonality=seasonality,
-        fs_orders=fs_orders,
-    )
-    mmm.derive_saturation(df=df, scalability_df=scalability_df)
-    mmm.set_hyper_params(params=best_params)
-    mmm.fit(df, num_warmup=100, num_sample=100, chains=4)
-
+    channels = mmm.get_spend_cols()
+    df = mmm.get_raw_df()
     budget_start = "2020-01-01"
     budget_end = "2020-01-31"
 
@@ -119,55 +67,10 @@ def test_target_maximizer_init(with_events, seasonality, fs_orders):
 
 # test target maximizer optimization behaviors
 def test_target_maximizer():
-    # data_args
-    seed = 2022
-    n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
-    channels = ["promo", "radio", "search", "social", "tv"]
-    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
-    features_scale = np.array([550, 2500, 500, 1000, 3500])
-    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
-    start_date = "2019-01-01"
-    # adstock_args = {
-    #     "n_steps": 28,
-    #     "peak_step": np.array([10, 8, 5, 3, 2]),
-    #     "left_growth": np.array([0.05, 0.08, 0.1, 0.5, 0.75]),
-    #     "right_growth": np.array([-0.03, -0.6, -0.5, -0.1, -0.25]),
-    # }
-    best_params = {
-        "damped_factor": 0.9057,
-        "level_sm_input": 0.00245,
-    }
-    np.random.seed(seed)
+    with open("./tests/resources/seasonal-model.pkl", "rb") as f:
+        mmm = pickle.load(f)
 
-    df, scalability_df, adstock_df, event_cols = make_mmm_daily_data(
-        channels_coef=channels_coef,
-        channels=channels,
-        features_loc=features_loc,
-        features_scale=features_scale,
-        scalability=scalability,
-        n_steps=n_steps,
-        start_date=start_date,
-        adstock_args=None,
-        with_yearly_seasonality=True,
-        with_weekly_seasonality=True,
-        country="US",
-    )
-
-    mmm = MMM(
-        kpi_col="sales",
-        date_col="date",
-        spend_cols=channels,
-        event_cols=event_cols,
-        seed=seed,
-        adstock_df=adstock_df,
-        seasonality=[7, 365.25],
-        fs_orders=[2, 3],
-    )
-    mmm.derive_saturation(df=df, scalability_df=scalability_df)
-    mmm.set_hyper_params(params=best_params)
-    # need this 4000/4000 to make sure coefficients are converged
-    mmm.fit(df, num_warmup=1000, num_sample=1000, chains=4)
+    df = mmm.get_raw_df()
     budget_start = "2020-01-01"
     budget_end = "2020-01-31"
     optim_channels = mmm.get_spend_cols()

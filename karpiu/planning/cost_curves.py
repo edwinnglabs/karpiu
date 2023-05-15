@@ -23,8 +23,8 @@ class CostCurves:
         spend_df: Optional[pd.DataFrame] = None,
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
-        max_spend: Optional[Union[np.array, float]] = None,
-        multipliers: Optional[Union[np.array, Dict[str, np.array]]] = None,
+        max_spend: Optional[Union[np.ndarray, float]] = None,
+        multipliers: Optional[Union[np.ndarray, Dict[str, np.ndarray]]] = None,
         min_spend: float = 1.0,
     ):
         if spend_df is None:
@@ -233,13 +233,13 @@ class CostCurves:
 
         self.cost_curves = pd.DataFrame(cost_curves_dict)
 
-    def get_multipliers(self) -> Union[np.array, Dict[str, np.array]]:
+    def get_multipliers(self) -> Union[np.ndarray, Dict[str, np.ndarray]]:
         return deepcopy(self.multipliers)
 
     def get_cost_curves(self) -> pd.DataFrame:
         return deepcopy(self.cost_curves)
 
-    def get_max_spend(self) -> np.array:
+    def get_max_spend(self) -> np.ndarray:
         return deepcopy(self.max_spend)
 
     def plot(

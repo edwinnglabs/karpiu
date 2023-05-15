@@ -1,80 +1,26 @@
 import pytest
 import numpy as np
 import pandas as pd
+import pickle
 
-from karpiu.models import MMM
-from karpiu.simulation import make_mmm_daily_data
-from karpiu.explainability import AttributorBeta as Attributor
+from karpiu.explainability import AttributorBeta
 
 
-@pytest.mark.parametrize(
-    "with_events",
-    [True, False],
-    ids=["w_events", "wo_events"],
-)
-@pytest.mark.parametrize(
-    "seasonality, fs_orders",
-    [
-        ([365.25], [3]),
-        (None, None),
-    ],
-    ids=["w_seasonality", "wo_seasonality"],
-)
-def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
-    # data_args
-    seed = 2022
-    n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
-    channels = ["promo", "radio", "search", "social", "tv"]
-    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
-    features_scale = np.array([550, 2500, 500, 1000, 3500])
-    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
-    start_date = "2019-01-01"
-    best_params = {
-        "damped_factor": 0.9057,
-        "level_sm_input": 0.0245,
-    }
-
-    np.random.seed(seed)
-    with_yearly_seasonality = False
-    if seasonality is not None and len(seasonality) > 0:
-        with_yearly_seasonality = True
-
-    df, scalability_df, adstock_df, event_cols = make_mmm_daily_data(
-        channels_coef=channels_coef,
-        channels=channels,
-        features_loc=features_loc,
-        features_scale=features_scale,
-        scalability=scalability,
-        n_steps=n_steps,
-        start_date=start_date,
-        adstock_args=None,
-        with_yearly_seasonality=with_yearly_seasonality,
-        country="US" if with_events else None,
-    )
-    mmm = MMM(
-        kpi_col="sales",
-        date_col="date",
-        spend_cols=channels,
-        event_cols=event_cols,
-        seasonality=seasonality,
-        fs_orders=fs_orders,
-        adstock_df=adstock_df,
-        seed=seed,
-    )
-    mmm.derive_saturation(df=df, scalability_df=scalability_df)
-    mmm.set_hyper_params(best_params)
-    # need this 4000/4000 to make sure coefficients are converged
-    mmm.fit(df, num_warmup=100, num_sample=100, chains=4)
-
+def test_wo_attribution():
+    with open("./tests/resources/simple-model.pkl", "rb") as f:
+        mmm = pickle.load(f)
+    
+    df = mmm.get_raw_df()
+    channels = mmm.get_spend_cols()
     channels_subsets = (channels, channels[0:2])
 
     attr_start = "2020-01-01"
     attr_end = "2020-01-31"
     duration = (pd.to_datetime(attr_end) - pd.to_datetime(attr_start)).days + 1
 
+    # check attribution works with full set and subset of channels
     for ch_subset in channels_subsets:
-        attr_obj = Attributor(
+        attr_obj = AttributorBeta(
             mmm,
             attr_regressors=ch_subset,
             start="2020-01-01",
@@ -100,7 +46,7 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
 
     # in single step, compare with prediction delta to make sure the one-of is calculated
     # correctly
-    attr_obj = Attributor(
+    attr_obj = AttributorBeta(
         mmm,
         attr_regressors=channels,
         start=attr_start,
@@ -142,70 +88,18 @@ def test_wo_adstock_attribution(with_events, seasonality, fs_orders):
 # TODO: a complex module is doable to sum over more terms of prediction delta
 # TODO: in verifying the decomp
 @pytest.mark.parametrize(
-    "with_events",
-    [True, False],
-    ids=["w_events", "wo_events"],
-)
-@pytest.mark.parametrize(
-    "seasonality, fs_orders",
+    "model_path",
     [
-        ([365.25], [3]),
-        (None, None),
+        "./tests/resources/seasonal-model.pkl",
+        "./tests/resources/non-seasonal-model.pkl",
     ],
-    ids=["w_seasonality", "wo_seasonality"],
+    ids=["full_case", "wo_seasonality_and_events"],
 )
-def test_w_adstock_attribution(with_events, seasonality, fs_orders):
-    # data_args
-    seed = 2022
-    n_steps = 365 * 3
-    channels_coef = [0.053, 0.08, 0.19, 0.125, 0.1]
-    channels = ["promo", "radio", "search", "social", "tv"]
-    features_loc = np.array([2000, 5000, 3850, 3000, 7500])
-    features_scale = np.array([550, 2500, 500, 1000, 3500])
-    scalability = np.array([3.0, 1.25, 0.8, 1.3, 1.5])
-    start_date = "2019-01-01"
-    best_params = {
-        "damped_factor": 0.9057,
-        "level_sm_input": 0.0245,
-    }
-    adstock_args = {
-        "n_steps": 28,
-        "peak_step": np.array([10, 8, 5, 3, 2]),
-        "left_growth": np.array([0.05, 0.08, 0.1, 0.5, 0.75]),
-        "right_growth": np.array([-0.03, -0.6, -0.5, -0.1, -0.25]),
-    }
+def test_w_adstock_attribution(model_path):
+    with open(model_path, "rb") as f:
+        mmm = pickle.load(f)
 
-    np.random.seed(seed)
-    with_yearly_seasonality = False
-    if seasonality is not None and len(seasonality) > 0:
-        with_yearly_seasonality = True
-
-    df, scalability_df, adstock_df, event_cols = make_mmm_daily_data(
-        channels_coef=channels_coef,
-        channels=channels,
-        features_loc=features_loc,
-        features_scale=features_scale,
-        scalability=scalability,
-        n_steps=n_steps,
-        start_date=start_date,
-        adstock_args=adstock_args,
-        with_yearly_seasonality=with_yearly_seasonality,
-        country="US" if with_events else None,
-    )
-    mmm = MMM(
-        kpi_col="sales",
-        date_col="date",
-        spend_cols=channels,
-        event_cols=event_cols,
-        seasonality=seasonality,
-        fs_orders=fs_orders,
-        adstock_df=adstock_df,
-        seed=seed,
-    )
-    mmm.derive_saturation(df=df, scalability_df=scalability_df)
-    mmm.set_hyper_params(best_params)
-    mmm.fit(df, num_warmup=100, num_sample=100, chains=4)
-
+    channels = mmm.get_spend_cols()
     channels_subsets = (channels, channels[0:2])
 
     attr_start = "2020-01-01"
@@ -213,7 +107,7 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
     duration = (pd.to_datetime(attr_end) - pd.to_datetime(attr_start)).days + 1
 
     for ch_subset in channels_subsets:
-        attr_obj = Attributor(
+        attr_obj = AttributorBeta(
             mmm,
             attr_regressors=ch_subset,
             start=attr_start,
@@ -236,7 +130,7 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
     # test different ways to call attribution
     # TODO: parameterize this later
     # with regressors specified
-    attr_obj = Attributor(
+    attr_obj = AttributorBeta(
         mmm,
         attr_regressors=channels[0:2],
         start="2020-01-01",
@@ -244,13 +138,13 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
     )
     _, _, _, _ = attr_obj.make_attribution(fixed_intercept=False)
     # without regressors specified
-    attr_obj = Attributor(
+    attr_obj = AttributorBeta(
         mmm,
         start="2020-01-01",
         end="2020-01-31",
     )
     # with regressors specified
-    attr_obj = Attributor(
+    attr_obj = AttributorBeta(
         mmm,
         attr_regressors=channels[0:2],
         start="2020-01-01",
@@ -258,12 +152,12 @@ def test_w_adstock_attribution(with_events, seasonality, fs_orders):
     )
     _, _, _, _ = attr_obj.make_attribution(fixed_intercept=False)
     # without date-range specified
-    attr_obj = Attributor(
+    attr_obj = AttributorBeta(
         mmm,
     )
     _, _, _, _ = attr_obj.make_attribution(fixed_intercept=False)
     # with df specified
-    attr_obj = Attributor(
+    attr_obj = AttributorBeta(
         mmm,
         df=mmm.get_raw_df(),
         start="2020-01-01",

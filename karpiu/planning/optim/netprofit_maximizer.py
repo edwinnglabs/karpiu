@@ -13,12 +13,12 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
     lift-time values (LTV) per channel
     """
 
-    def __init__(self, ltv_arr: np.array, **kwargs):
+    def __init__(self, ltv_arr: np.ndarray, **kwargs):
         super().__init__(**kwargs)
         # (n_optim_channels, )
         self.ltv_arr = ltv_arr
 
-    def objective_func(self, spend: np.array):
+    def objective_func(self, spend: np.ndarray):
         # spend should be (n_optim_channels, )
         spend_matrix = (
             spend
@@ -84,13 +84,13 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
     lift-time values (LTV) per channel
     """
 
-    def __init__(self, ltv_arr: np.array, variance_penalty: float = 1e-3, **kwargs):
+    def __init__(self, ltv_arr: np.ndarray, variance_penalty: float = 1e-3, **kwargs):
         super().__init__(**kwargs)
         # (n_optim_channels, )
         self.ltv_arr = ltv_arr
         self.variance_penalty = variance_penalty
 
-    def objective_func(self, spend: np.array):
+    def objective_func(self, spend: np.ndarray):
         # spend should be (n_optim_channels, )
         spend_matrix = (
             np.expand_dims(spend, -1)
