@@ -79,6 +79,9 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         return loss
 
 
+
+
+
 class TimeNetProfitMaximizer(TimeBudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and
     lift-time values (LTV) per channel

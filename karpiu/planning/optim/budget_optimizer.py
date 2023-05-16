@@ -25,6 +25,8 @@ class BudgetOptimizer(MMMShell):
     ):
         self.optim_channels = optim_channels
         self.optim_channels.sort()
+        self.bounds_and_constraints_df = None
+        self.xs = list()
 
         super().__init__(
             model=model,
@@ -79,9 +81,7 @@ class BudgetOptimizer(MMMShell):
         # derive budget bounds for each step and each channel
         self.budget_bounds = optim.Bounds(
             lb=np.zeros(n_budget_steps * self.n_optim_channels),
-            ub=np.ones(n_budget_steps * self.n_optim_channels)
-            * self.total_budget
-            / self.spend_scaler,
+            ub=np.ones(n_budget_steps * self.n_optim_channels) * np.inf,
         )
 
     def set_constraints(self, constraints: List[optim.LinearConstraint]):
@@ -101,24 +101,6 @@ class BudgetOptimizer(MMMShell):
             ub=np.ones(1) * total_budget / self.spend_scaler,
         )
         return total_budget_constraint
-
-    def generate_individual_channel_constraints(self, delta=0.1):
-        constraints = list()
-        init_spend_channel_total_arr = (
-            np.sum(self.init_spend_matrix, 0) / self.spend_scaler
-        )
-        for idx in range(self.n_optim_channels):
-            lb = (1 - delta) * init_spend_channel_total_arr[idx]
-            ub = (1 + delta) * init_spend_channel_total_arr[idx]
-            A = np.zeros((self.n_budget_steps, self.n_optim_channels))
-            A[:, idx] = 1.0
-            ind_constraint = optim.LinearConstraint(
-                A=A.flatten(),
-                lb=lb,
-                ub=ub,
-            )
-            constraints.append(ind_constraint)
-        return constraints
 
     def get_df(self) -> pd.DataFrame:
         df = self.df.copy()
@@ -150,6 +132,9 @@ class BudgetOptimizer(MMMShell):
         else:
             x0 = init.flatten() / self.spend_scaler
 
+        # clear all solutions
+        self.xs = list()
+
         options = {
             "disp": True,
             "maxiter": maxiter,
@@ -165,6 +150,7 @@ class BudgetOptimizer(MMMShell):
             bounds=self.budget_bounds,
             constraints=self.constraints,
             options=options,
+            callback=self.optim_callback,
         )
 
         optim_spend_matrix = (
@@ -175,6 +161,12 @@ class BudgetOptimizer(MMMShell):
         optim_df.loc[self.budget_mask, self.optim_channels] = optim_spend_matrix
         self.curr_spend_matrix = optim_spend_matrix
         return optim_df
+
+    def optim_callback(self, xk: np.ndarray, *_):
+        """the callback used for each iteration within optimization.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
+        """
+        self.xs.append(xk)
 
 
 class ChannelBudgetOptimizer(MMMShell):
@@ -197,6 +189,7 @@ class ChannelBudgetOptimizer(MMMShell):
         else:
             self.logger = logger
 
+        self.xs = list()
         super().__init__(
             model=model,
             target_regressors=optim_channels,
@@ -312,6 +305,9 @@ class ChannelBudgetOptimizer(MMMShell):
         else:
             x0 = init.flatten() / self.spend_scaler
 
+        # clear all solutions
+        self.xs = list()
+
         sol = optim.minimize(
             self.objective_func,
             x0=x0,
@@ -324,6 +320,7 @@ class ChannelBudgetOptimizer(MMMShell):
                 "eps": eps,
                 "ftol": ftol,
             },
+            callback=self.optim_callback,
         )
 
         optim_spend_array = sol.x * self.spend_scaler
@@ -341,6 +338,41 @@ class ChannelBudgetOptimizer(MMMShell):
         self.curr_spend_array = optim_spend_array
         return optim_df
 
+    def optim_callback(self, xk: np.ndarray, *_):
+        """the callback used for each iteration within optimization.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
+        """
+        self.xs.append(xk)
+
+    def set_bounds_and_constraints(self, df: pd.DataFrame) -> None:
+        """_summary_
+
+        Args:
+            df (pd.DataFrame): must contain column named as "channel" which can map with the channel index; a special
+            channel can be specified once as "total" which will be used as budget constraints instead of bounds
+        """
+        self.bounds_and_constraints_df = df
+        bounds_and_constraints_df = df.copy()
+        bounds_and_constraints_df = bounds_and_constraints_df.set_index("channels")
+        bounds_df = bounds_and_constraints_df.loc[self.optim_channels]
+
+        self.logger.info("Set bounds.")
+        self.budget_bounds = optim.Bounds(
+            lb=bounds_df["lower"].values / self.spend_scaler,
+            ub=bounds_df["upper"].values / self.spend_scaler,
+        )
+
+        if "total" in bounds_and_constraints_df.index.to_list():
+            total_budget_upper = bounds_and_constraints_df.loc["total", "upper"]
+            total_budget_lower = bounds_and_constraints_df.loc["total", "lower"]
+            self.logger.info("Set total budget constraints.")
+
+            total_budget_constraint = optim.LinearConstraint(
+                A=np.ones(self.n_optim_channels),
+                lb=np.ones(1) * total_budget_lower / self.spend_scaler,
+                ub=np.ones(1) * total_budget_upper / self.spend_scaler,
+            )
+            self.set_constraints([total_budget_constraint])
 
 class TimeBudgetOptimizer(MMMShell):
     """_summary_
@@ -520,3 +552,38 @@ class TimeBudgetOptimizer(MMMShell):
         self.curr_spend_matrix = optim_spend_matrix
         self.curr_spend_array = optim_spend_array
         return optim_df
+
+    def set_bounds_and_constraints(self, df: pd.DataFrame) -> None:
+        """_summary_
+
+        Args:
+            df (pd.DataFrame): must contain column named as "channel" which can map with the channel index; a special
+            channel can be specified once as "total" which will be used as budget constraints instead of bounds
+        """
+        # "date" is a reserved keyword
+        self.bounds_and_constraints_df = df
+        bounds_and_constraints_df = df.copy()
+        bounds_df = bounds_and_constraints_df.loc[
+            bounds_and_constraints_df["date"] != "total", :].reset_index(drop=True)
+        assert bounds_df.shape[0] == self.n_budget_steps
+
+        self.logger.info("Set bounds.")
+        self.budget_bounds = optim.Bounds(
+            lb=bounds_df["lower"].values / self.spend_scaler,
+            ub=bounds_df["upper"].values / self.spend_scaler,
+        )
+
+        if "total" in bounds_and_constraints_df["date"].to_list():
+            constraints_df = bounds_and_constraints_df.loc[
+                bounds_and_constraints_df["date"] == "total", :].reset_index(drop=True)
+            assert constraints_df.shape[0] == 1
+            total_budget_upper = constraints_df["upper"]
+            total_budget_lower = constraints_df["lower"]
+            self.logger.info("Set total budget constraints.")
+
+            total_budget_constraint = optim.LinearConstraint(
+                A=np.ones(self.n_budget_steps),
+                lb=np.ones(1) * total_budget_lower / self.spend_scaler,
+                ub=np.ones(1) * total_budget_upper / self.spend_scaler,
+            )
+            self.set_constraints([total_budget_constraint])
