@@ -5,8 +5,8 @@ nav:
   - Home: index.md
   - Quickstart: ./examples/quickstart.ipynb
   - More Examples:
-    - Seasonality and Events: ./examples/seasonality_and_events.ipynb
     - Attribution: ./examples/attribution.ipynb
+    - Adstock: ./examples/adstock.ipynb
   - Optimization:
     - Target Maximization: ./examples/target_max.ipynb
     - Net Returns Maximization: ./examples/net_returns_max.ipynb
