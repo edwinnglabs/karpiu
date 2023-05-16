@@ -245,7 +245,7 @@ class ChannelBudgetOptimizer(MMMShell):
         # derive budget bounds for each step and each channel
         self.budget_bounds = optim.Bounds(
             lb=np.zeros(self.n_optim_channels),
-            ub=np.ones(self.n_optim_channels) * self.total_budget / self.spend_scaler,
+            ub=np.ones(self.n_optim_channels) * np.inf,
         )
 
         # spend allocation on time dimension
@@ -419,20 +419,8 @@ class TimeBudgetOptimizer(MMMShell):
 
         # derive budget bounds for each step and each channel
         self.budget_bounds = optim.Bounds(
-            lb=np.ones(self.n_budget_steps)
-            * (
-                self.total_budget
-                / self.spend_scaler
-                / self.n_budget_steps
-                * self.lb_ratio
-            ),
-            ub=np.ones(self.n_budget_steps)
-            * (
-                self.total_budget
-                / self.spend_scaler
-                / self.n_budget_steps
-                * self.ub_ratio
-            ),
+            lb=np.zeros(self.n_budget_steps),
+            ub=np.ones(self.n_budget_steps) * np.inf,
         )
 
         # spend allocation on time dimension
