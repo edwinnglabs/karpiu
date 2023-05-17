@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Optional, List
+from typing import Optional, List, Dict
 import logging
 import scipy.optimize as optim
 from copy import deepcopy
@@ -79,10 +79,13 @@ class BudgetOptimizer(MMMShell):
         # derive budget bounds for each step and each channel
         self.budget_bounds = optim.Bounds(
             lb=np.zeros(n_budget_steps * self.n_optim_channels),
-            ub=np.ones(n_budget_steps * self.n_optim_channels)
-            * self.total_budget
-            / self.spend_scaler,
+            ub=np.ones(n_budget_steps * self.n_optim_channels) * np.inf,
         )
+
+        # create a dict to store all return metrics from callback
+        self.callback_metrics = dict()
+        self._init_callback_metrics()
+        self.bounds_and_constraints_df = None
 
     def set_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints = constraints
@@ -102,24 +105,6 @@ class BudgetOptimizer(MMMShell):
         )
         return total_budget_constraint
 
-    def generate_individual_channel_constraints(self, delta=0.1):
-        constraints = list()
-        init_spend_channel_total_arr = (
-            np.sum(self.init_spend_matrix, 0) / self.spend_scaler
-        )
-        for idx in range(self.n_optim_channels):
-            lb = (1 - delta) * init_spend_channel_total_arr[idx]
-            ub = (1 + delta) * init_spend_channel_total_arr[idx]
-            A = np.zeros((self.n_budget_steps, self.n_optim_channels))
-            A[:, idx] = 1.0
-            ind_constraint = optim.LinearConstraint(
-                A=A.flatten(),
-                lb=lb,
-                ub=ub,
-            )
-            constraints.append(ind_constraint)
-        return constraints
-
     def get_df(self) -> pd.DataFrame:
         df = self.df.copy()
         return df
@@ -133,7 +118,10 @@ class BudgetOptimizer(MMMShell):
     def get_init_state(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend):
+    def get_callback_metrics(self) -> Dict[str, np.ndarray]:
+        return deepcopy(self.callback_metrics)
+
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False) -> np.ndarray:
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
@@ -150,6 +138,9 @@ class BudgetOptimizer(MMMShell):
         else:
             x0 = init.flatten() / self.spend_scaler
 
+        # clear all solutions
+        self._init_callback_metrics()
+
         options = {
             "disp": True,
             "maxiter": maxiter,
@@ -165,6 +156,7 @@ class BudgetOptimizer(MMMShell):
             bounds=self.budget_bounds,
             constraints=self.constraints,
             options=options,
+            callback=self.optim_callback,
         )
 
         optim_spend_matrix = (
@@ -175,6 +167,15 @@ class BudgetOptimizer(MMMShell):
         optim_df.loc[self.budget_mask, self.optim_channels] = optim_spend_matrix
         self.curr_spend_matrix = optim_spend_matrix
         return optim_df
+
+    def _init_callback_metrics(self):
+        self.callback_metrics = {"xs": list()}
+
+    def optim_callback(self, xk: np.ndarray, *_):
+        """the callback used for each iteration within optimization.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
+        """
+        self.callback_metrics["xs"].append(xk)
 
 
 class ChannelBudgetOptimizer(MMMShell):
@@ -258,6 +259,11 @@ class ChannelBudgetOptimizer(MMMShell):
         if len(self.weight) != self.n_budget_steps:
             raise Exception("Input weight has different length from budget period.")
 
+        # create a dict to store all return metrics from callback
+        self.callback_metrics = dict()
+        self._init_callback_metrics()
+        self.bounds_and_constraints_df = None
+
     def set_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints = constraints
 
@@ -295,7 +301,10 @@ class ChannelBudgetOptimizer(MMMShell):
     def get_init_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend: np.ndarray):
+    def get_callback_metrics(self) -> Dict[str, np.ndarray]:
+        return deepcopy(self.callback_metrics)
+
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False) -> np.ndarray:
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
@@ -312,6 +321,9 @@ class ChannelBudgetOptimizer(MMMShell):
         else:
             x0 = init.flatten() / self.spend_scaler
 
+        # clear all results stack from callback
+        self._init_callback_metrics()
+
         sol = optim.minimize(
             self.objective_func,
             x0=x0,
@@ -324,6 +336,7 @@ class ChannelBudgetOptimizer(MMMShell):
                 "eps": eps,
                 "ftol": ftol,
             },
+            callback=self.optim_callback,
         )
 
         optim_spend_array = sol.x * self.spend_scaler
@@ -340,6 +353,45 @@ class ChannelBudgetOptimizer(MMMShell):
         self.curr_spend_matrix = optim_spend_matrix
         self.curr_spend_array = optim_spend_array
         return optim_df
+
+    def _init_callback_metrics(self):
+        self.callback_metrics = {"xs": list()}
+
+    def optim_callback(self, xk: np.ndarray, *_):
+        """the callback used for each iteration within optimization.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
+        """
+        self.callback_metrics["xs"].append(xk)
+
+    def set_bounds_and_constraints(self, df: pd.DataFrame) -> None:
+        """_summary_
+
+        Args:
+            df (pd.DataFrame): must contain column named as "channel" which can map with the channel index; a special
+            channel can be specified once as "total" which will be used as budget constraints instead of bounds
+        """
+        self.bounds_and_constraints_df = df
+        bounds_and_constraints_df = df.copy()
+        bounds_and_constraints_df = bounds_and_constraints_df.set_index("channels")
+        bounds_df = bounds_and_constraints_df.loc[self.optim_channels]
+
+        self.logger.info("Set bounds.")
+        self.budget_bounds = optim.Bounds(
+            lb=bounds_df["lower"].values / self.spend_scaler,
+            ub=bounds_df["upper"].values / self.spend_scaler,
+        )
+
+        if "total" in bounds_and_constraints_df.index.to_list():
+            total_budget_upper = bounds_and_constraints_df.loc["total", "upper"]
+            total_budget_lower = bounds_and_constraints_df.loc["total", "lower"]
+            self.logger.info("Set total budget constraints.")
+
+            total_budget_constraint = optim.LinearConstraint(
+                A=np.ones(self.n_optim_channels),
+                lb=np.ones(1) * total_budget_lower / self.spend_scaler,
+                ub=np.ones(1) * total_budget_upper / self.spend_scaler,
+            )
+            self.set_constraints([total_budget_constraint])
 
 
 class TimeBudgetOptimizer(MMMShell):
@@ -475,7 +527,10 @@ class TimeBudgetOptimizer(MMMShell):
     def get_init_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend: np.ndarray):
+    def get_callback_metrics(self) -> Dict[str, np.ndarray]:
+        return deepcopy(self.callback_metrics)
+
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False) -> np.ndarray:
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
@@ -520,3 +575,40 @@ class TimeBudgetOptimizer(MMMShell):
         self.curr_spend_matrix = optim_spend_matrix
         self.curr_spend_array = optim_spend_array
         return optim_df
+
+    def set_bounds_and_constraints(self, df: pd.DataFrame) -> None:
+        """_summary_
+
+        Args:
+            df (pd.DataFrame): must contain column named as "channel" which can map with the channel index; a special
+            channel can be specified once as "total" which will be used as budget constraints instead of bounds
+        """
+        # "date" is a reserved keyword
+        self.bounds_and_constraints_df = df
+        bounds_and_constraints_df = df.copy()
+        bounds_df = bounds_and_constraints_df.loc[
+            bounds_and_constraints_df["date"] != "total", :
+        ].reset_index(drop=True)
+        assert bounds_df.shape[0] == self.n_budget_steps
+
+        self.logger.info("Set bounds.")
+        self.budget_bounds = optim.Bounds(
+            lb=bounds_df["lower"].values / self.spend_scaler,
+            ub=bounds_df["upper"].values / self.spend_scaler,
+        )
+
+        if "total" in bounds_and_constraints_df["date"].to_list():
+            constraints_df = bounds_and_constraints_df.loc[
+                bounds_and_constraints_df["date"] == "total", :
+            ].reset_index(drop=True)
+            assert constraints_df.shape[0] == 1
+            total_budget_upper = constraints_df["upper"]
+            total_budget_lower = constraints_df["lower"]
+            self.logger.info("Set total budget constraints.")
+
+            total_budget_constraint = optim.LinearConstraint(
+                A=np.ones(self.n_budget_steps),
+                lb=np.ones(1) * total_budget_lower / self.spend_scaler,
+                ub=np.ones(1) * total_budget_upper / self.spend_scaler,
+            )
+            self.set_constraints([total_budget_constraint])

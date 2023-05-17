@@ -17,15 +17,16 @@ from .utils import get_logger
 class PriorSolver:
     """Solving Regression Coefficient Prior from MMM by using Attribution logic"""
 
-    def __init__(self, tests_df: pd.DataFrame):
+    def __init__(self, tests_df: pd.DataFrame, logger: Optional[logging.Logger] = None):
         self.tests_df = tests_df.copy()
+        if logger is None:
+            self.logger = get_logger("karpiu-calibration")
 
     def derive_prior(
         self,
         model: MMM,
         shuffle: bool = False,
         debug: bool = False,
-        logger: Optional[logging.Logger] = None,
         fixed_intercept: bool = False,
     ) -> pd.DataFrame:
         """Solving priors independently (and sequentially) based on each coefficients loc and scale input.
@@ -38,8 +39,6 @@ class PriorSolver:
         Returns:
             pd.DataFrame: _description_
         """
-        if logger is None:
-            self.logger = get_logger("karpiu-calibration")
 
         input_df = model.raw_df.copy()
         if shuffle:
@@ -182,11 +181,11 @@ def calibrate_model_with_test(
         logger = get_logger("karpiu-calibration")
 
     # solve ab-test priors
-    ps = PriorSolver(tests_df=tests_df)
+    ps = PriorSolver(tests_df=tests_df, logger=logger)
     for n in range(n_iter):
         logger.info("{}/{} iteration:".format(n + 1, n_iter))
         # shuffle is not impacting as we solve all priors from same initial model
-        curr_priors_full = ps.derive_prior(prev_model, shuffle=False, logger=logger)
+        curr_priors_full = ps.derive_prior(prev_model, shuffle=False)
         # curr_priors_full has row for each test
         # curr_priors_unique has row for each channel only (combining all tests within a channel)
         # len(validation_dfs_list) = number of runs

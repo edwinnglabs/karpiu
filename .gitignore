@@ -155,3 +155,4 @@ poetry.lock
 
 # pickle; can be binary if forced but ignore as default
 *.pkl
+*.gif
