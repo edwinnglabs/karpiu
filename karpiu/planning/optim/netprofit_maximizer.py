@@ -80,7 +80,7 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
             return np.sum(revenue), np.sum(cost)
         else:
             return loss
-    
+
     def _init_callback_metrics(self):
         self.callback_metrics = {
             "xs": list(),
@@ -97,6 +97,7 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         revs, costs = self.objective_func(xk, extra_info=True)
         self.callback_metrics["optim_revenues"].append(revs)
         self.callback_metrics["optim_costs"].append(costs)
+
 
 class TimeNetProfitMaximizer(TimeBudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and
@@ -174,7 +175,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
             return np.sum(revenue), np.sum(cost)
         else:
             return loss
-    
+
     def _init_callback_metrics(self):
         self.callback_metrics = {
             "xs": list(),

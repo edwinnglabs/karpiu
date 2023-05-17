@@ -40,7 +40,6 @@ class PriorSolver:
             pd.DataFrame: _description_
         """
 
-
         input_df = model.raw_df.copy()
         if shuffle:
             tests_df = self.tests_df.sample(frac=1, ignore_index=True)

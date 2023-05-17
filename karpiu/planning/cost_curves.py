@@ -95,11 +95,15 @@ class CostCurves:
             self.multipliers = multipliers
         else:
             if curve_type == "overall":
-                self.multipliers = self.derive_multipliers(extend_multiplier=extend_multiplier)
+                self.multipliers = self.derive_multipliers(
+                    extend_multiplier=extend_multiplier
+                )
             elif curve_type == "individual":
                 # since all the small channels can compare with the largest spend channel
                 # we don't need to extend by default
-                self.multipliers = self.derive_multipliers(extend_multiplier=extend_multiplier)
+                self.multipliers = self.derive_multipliers(
+                    extend_multiplier=extend_multiplier
+                )
         # will be generated under generate_cost_curves
         self.cost_curves = None
 
@@ -287,15 +291,18 @@ class CostCurves:
         n_channels = len(self.channels)
         nrows = math.ceil(n_channels / 2)
 
-
         cost_curves = self.cost_curves.copy()
         if optim_cost_curves is not None:
             optim_cost_curves = optim_cost_curves.copy()
 
         if not include_organic:
-            cost_curves = cost_curves.loc[cost_curves["ch"] != "organic"].reset_index(drop=True)
+            cost_curves = cost_curves.loc[cost_curves["ch"] != "organic"].reset_index(
+                drop=True
+            )
             if optim_cost_curves is not None:
-                optim_cost_curves = optim_cost_curves.loc[optim_cost_curves["ch"] != "organic"].reset_index(drop=True)
+                optim_cost_curves = optim_cost_curves.loc[
+                    optim_cost_curves["ch"] != "organic"
+                ].reset_index(drop=True)
         else:
             organic_outcome = cost_curves.loc[
                 cost_curves["ch"] == "organic", "total_outcome"
@@ -317,9 +324,7 @@ class CostCurves:
             axes = axes.flatten()
 
             for idx, ch in enumerate(self.channels):
-                temp_cc = cost_curves[cost_curves["ch"] == ch].reset_index(
-                    drop=True
-                )
+                temp_cc = cost_curves[cost_curves["ch"] == ch].reset_index(drop=True)
                 curr_spend_mask = temp_cc["multiplier"] == 1
 
                 axes[idx].plot(
@@ -346,7 +351,7 @@ class CostCurves:
                     s=48,
                     label="current spend",
                 )
-                
+
                 if include_organic:
                     axes[idx].axhline(
                         y=organic_outcome / spend_scaler,
@@ -399,9 +404,7 @@ class CostCurves:
         elif self.curve_type == "overall":
             # single cost curve
             fig, ax = plt.subplots(1, 1, figsize=(18, 12))
-            temp_cc = cost_curves[cost_curves["ch"] == "overall"].reset_index(
-                drop=True
-            )
+            temp_cc = cost_curves[cost_curves["ch"] == "overall"].reset_index(drop=True)
             curr_spend_mask = temp_cc["multiplier"] == 1
             ax.plot(
                 temp_cc["total_spend"].values / spend_scaler,
@@ -427,7 +430,9 @@ class CostCurves:
 
             if include_organic:
                 ax.axhline(
-                    y=organic_outcome / spend_scaler, linestyle="dashed", label="organic"
+                    y=organic_outcome / spend_scaler,
+                    linestyle="dashed",
+                    label="organic",
                 )
 
             ax.set_xlim(left=0.0, right=x_max)
@@ -465,10 +470,7 @@ class CostCurves:
             handles, labels = ax.get_legend_handles_labels()
         # exit from overall vs. individual cost curve
         fig.legend(
-            handles, labels, 
-            loc=9, ncol=2, 
-            bbox_to_anchor=(0.5, 0), 
-            prop={"size": 30}
+            handles, labels, loc=9, ncol=2, bbox_to_anchor=(0.5, 0), prop={"size": 30}
         )
         fig.tight_layout()
 

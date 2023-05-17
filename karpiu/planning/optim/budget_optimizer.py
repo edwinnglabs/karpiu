@@ -169,15 +169,14 @@ class BudgetOptimizer(MMMShell):
         return optim_df
 
     def _init_callback_metrics(self):
-        self.callback_metrics = {
-            "xs": list()
-        }
-        
+        self.callback_metrics = {"xs": list()}
+
     def optim_callback(self, xk: np.ndarray, *_):
         """the callback used for each iteration within optimization.
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
         self.callback_metrics["xs"].append(xk)
+
 
 class ChannelBudgetOptimizer(MMMShell):
     """Base class for optimization solution"""
@@ -356,9 +355,7 @@ class ChannelBudgetOptimizer(MMMShell):
         return optim_df
 
     def _init_callback_metrics(self):
-        self.callback_metrics = {
-            "xs": list()
-        } 
+        self.callback_metrics = {"xs": list()}
 
     def optim_callback(self, xk: np.ndarray, *_):
         """the callback used for each iteration within optimization.
@@ -395,6 +392,7 @@ class ChannelBudgetOptimizer(MMMShell):
                 ub=np.ones(1) * total_budget_upper / self.spend_scaler,
             )
             self.set_constraints([total_budget_constraint])
+
 
 class TimeBudgetOptimizer(MMMShell):
     """_summary_
@@ -589,7 +587,8 @@ class TimeBudgetOptimizer(MMMShell):
         self.bounds_and_constraints_df = df
         bounds_and_constraints_df = df.copy()
         bounds_df = bounds_and_constraints_df.loc[
-            bounds_and_constraints_df["date"] != "total", :].reset_index(drop=True)
+            bounds_and_constraints_df["date"] != "total", :
+        ].reset_index(drop=True)
         assert bounds_df.shape[0] == self.n_budget_steps
 
         self.logger.info("Set bounds.")
@@ -600,7 +599,8 @@ class TimeBudgetOptimizer(MMMShell):
 
         if "total" in bounds_and_constraints_df["date"].to_list():
             constraints_df = bounds_and_constraints_df.loc[
-                bounds_and_constraints_df["date"] == "total", :].reset_index(drop=True)
+                bounds_and_constraints_df["date"] == "total", :
+            ].reset_index(drop=True)
             assert constraints_df.shape[0] == 1
             total_budget_upper = constraints_df["upper"]
             total_budget_lower = constraints_df["lower"]
