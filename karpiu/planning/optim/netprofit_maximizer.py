@@ -17,8 +17,6 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         super().__init__(**kwargs)
         # (n_optim_channels, )
         self.ltv_arr = ltv_arr
-        self.optim_revenues = list()
-        self.optim_costs = list()
 
     def objective_func(self, spend: np.ndarray, extra_info: bool = False):
         # spend should be (n_optim_channels, )
@@ -83,24 +81,27 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         else:
             return loss
     
-    def callback_cleanup(self):
-        self.xs = list()
-        self.optim_revenues = list()
-        self.optim_costs = list()
+    def _init_callback_metrics(self):
+        self.callback_metrics = {
+            "xs": list(),
+            "optim_revenues": list(),
+            "optim_costs": list(),
+        }
 
     # override parent class
     def optim_callback(self, xk: np.ndarray, *_):
         """the callback used for each iteration within optimization.
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
-        self.xs.append(xk)
+        self.callback_metrics["xs"].append(xk)
         revs, costs = self.objective_func(xk, extra_info=True)
-        self.optim_revenues.append(revs)
-        self.optim_costs.append(costs)
+        self.callback_metrics["optim_revenues"].append(revs)
+        self.callback_metrics["optim_costs"].append(costs)
 
 class TimeNetProfitMaximizer(TimeBudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and
-    lift-time values (LTV) per channel
+    lift-time values (LTV) per channel; an extra variance penalty is introduced to resolve
+    identifiability due to adstock
     """
 
     def __init__(self, ltv_arr: np.ndarray, variance_penalty: float = 1e-3, **kwargs):
@@ -109,7 +110,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         self.ltv_arr = ltv_arr
         self.variance_penalty = variance_penalty
 
-    def objective_func(self, spend: np.ndarray):
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False):
         # spend should be (n_optim_channels, )
         spend_matrix = (
             np.expand_dims(spend, -1)
@@ -169,4 +170,24 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         loss = -1 * net_profit / self.response_scaler
         # add punishment of variance of spend; otherwise may risk of identifiability issue with adstock
         loss += self.variance_penalty * np.var(spend)
-        return loss
+        if extra_info:
+            return np.sum(revenue), np.sum(cost)
+        else:
+            return loss
+    
+    def _init_callback_metrics(self):
+        self.callback_metrics = {
+            "xs": list(),
+            "optim_revenues": list(),
+            "optim_costs": list(),
+        }
+
+    # override parent class
+    def optim_callback(self, xk: np.ndarray, *_):
+        """the callback used for each iteration within optimization.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
+        """
+        self.callback_metrics["xs"].append(xk)
+        revs, costs = self.objective_func(xk, extra_info=True)
+        self.callback_metrics["optim_revenues"].append(revs)
+        self.callback_metrics["optim_costs"].append(costs)

@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Optional, List
+from typing import Optional, List, Dict
 import logging
 import scipy.optimize as optim
 from copy import deepcopy
@@ -25,8 +25,6 @@ class BudgetOptimizer(MMMShell):
     ):
         self.optim_channels = optim_channels
         self.optim_channels.sort()
-        self.bounds_and_constraints_df = None
-        self.xs = list()
 
         super().__init__(
             model=model,
@@ -84,6 +82,11 @@ class BudgetOptimizer(MMMShell):
             ub=np.ones(n_budget_steps * self.n_optim_channels) * np.inf,
         )
 
+        # create a dict to store all return metrics from callback
+        self.callback_metrics = dict()
+        self._init_callback_metrics()
+        self.bounds_and_constraints_df = None
+
     def set_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints = constraints
 
@@ -115,7 +118,10 @@ class BudgetOptimizer(MMMShell):
     def get_init_state(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend):
+    def get_callback_metrics(self) -> Dict[str, np.ndarray]:
+        return deepcopy(self.callback_metrics)
+
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False) -> np.ndarray:
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
@@ -133,7 +139,7 @@ class BudgetOptimizer(MMMShell):
             x0 = init.flatten() / self.spend_scaler
 
         # clear all solutions
-        self.xs = list()
+        self._init_callback_metrics()
 
         options = {
             "disp": True,
@@ -162,12 +168,16 @@ class BudgetOptimizer(MMMShell):
         self.curr_spend_matrix = optim_spend_matrix
         return optim_df
 
+    def _init_callback_metrics(self):
+        self.callback_metrics = {
+            "xs": list()
+        }
+        
     def optim_callback(self, xk: np.ndarray, *_):
         """the callback used for each iteration within optimization.
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
-        self.xs.append(xk)
-
+        self.callback_metrics["xs"].append(xk)
 
 class ChannelBudgetOptimizer(MMMShell):
     """Base class for optimization solution"""
@@ -188,8 +198,6 @@ class ChannelBudgetOptimizer(MMMShell):
             self.logger = logging.getLogger("karpiu-planning")
         else:
             self.logger = logger
-
-        self.xs = list()
 
         super().__init__(
             model=model,
@@ -252,6 +260,11 @@ class ChannelBudgetOptimizer(MMMShell):
         if len(self.weight) != self.n_budget_steps:
             raise Exception("Input weight has different length from budget period.")
 
+        # create a dict to store all return metrics from callback
+        self.callback_metrics = dict()
+        self._init_callback_metrics()
+        self.bounds_and_constraints_df = None
+
     def set_constraints(self, constraints: List[optim.LinearConstraint]):
         self.constraints = constraints
 
@@ -289,7 +302,10 @@ class ChannelBudgetOptimizer(MMMShell):
     def get_init_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend: np.ndarray):
+    def get_callback_metrics(self) -> Dict[str, np.ndarray]:
+        return deepcopy(self.callback_metrics)
+
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False) -> np.ndarray:
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
@@ -307,7 +323,7 @@ class ChannelBudgetOptimizer(MMMShell):
             x0 = init.flatten() / self.spend_scaler
 
         # clear all results stack from callback
-        self.callback_cleanup()
+        self._init_callback_metrics()
 
         sol = optim.minimize(
             self.objective_func,
@@ -339,14 +355,16 @@ class ChannelBudgetOptimizer(MMMShell):
         self.curr_spend_array = optim_spend_array
         return optim_df
 
+    def _init_callback_metrics(self):
+        self.callback_metrics = {
+            "xs": list()
+        } 
+
     def optim_callback(self, xk: np.ndarray, *_):
         """the callback used for each iteration within optimization.
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
-        self.xs.append(xk)
-
-    def callback_cleanup(self):
-        self.xs = list()
+        self.callback_metrics["xs"].append(xk)
 
     def set_bounds_and_constraints(self, df: pd.DataFrame) -> None:
         """_summary_
@@ -511,7 +529,10 @@ class TimeBudgetOptimizer(MMMShell):
     def get_init_spend_matrix(self) -> np.ndarray:
         return deepcopy(self.init_spend_matrix)
 
-    def objective_func(self, spend: np.ndarray):
+    def get_callback_metrics(self) -> Dict[str, np.ndarray]:
+        return deepcopy(self.callback_metrics)
+
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False) -> np.ndarray:
         raise Exception(
             "Abstract objective function. Child class needs to override this method to have concrete result."
         )
