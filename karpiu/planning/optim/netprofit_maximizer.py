@@ -17,8 +17,10 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         super().__init__(**kwargs)
         # (n_optim_channels, )
         self.ltv_arr = ltv_arr
+        self.optim_revenues = list()
+        self.optim_costs = list()
 
-    def objective_func(self, spend: np.ndarray):
+    def objective_func(self, spend: np.ndarray, extra_info: bool = False):
         # spend should be (n_optim_channels, )
         spend_matrix = (
             spend
@@ -76,11 +78,25 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         cost = np.sum(spend_matrix, 0)
         net_profit = np.sum(revenue - cost)
         loss = -1 * net_profit / self.response_scaler
-        return loss
+        if extra_info:
+            return np.sum(revenue), np.sum(cost)
+        else:
+            return loss
+    
+    def callback_cleanup(self):
+        self.xs = list()
+        self.optim_revenues = list()
+        self.optim_costs = list()
 
-
-
-
+    # override parent class
+    def optim_callback(self, xk: np.ndarray, *_):
+        """the callback used for each iteration within optimization.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
+        """
+        self.xs.append(xk)
+        revs, costs = self.objective_func(xk, extra_info=True)
+        self.optim_revenues.append(revs)
+        self.optim_costs.append(costs)
 
 class TimeNetProfitMaximizer(TimeBudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and

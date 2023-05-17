@@ -190,6 +190,7 @@ class ChannelBudgetOptimizer(MMMShell):
             self.logger = logger
 
         self.xs = list()
+
         super().__init__(
             model=model,
             target_regressors=optim_channels,
@@ -305,8 +306,8 @@ class ChannelBudgetOptimizer(MMMShell):
         else:
             x0 = init.flatten() / self.spend_scaler
 
-        # clear all solutions
-        self.xs = list()
+        # clear all results stack from callback
+        self.callback_cleanup()
 
         sol = optim.minimize(
             self.objective_func,
@@ -343,6 +344,9 @@ class ChannelBudgetOptimizer(MMMShell):
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
         self.xs.append(xk)
+
+    def callback_cleanup(self):
+        self.xs = list()
 
     def set_bounds_and_constraints(self, df: pd.DataFrame) -> None:
         """_summary_
