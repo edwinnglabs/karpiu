@@ -21,6 +21,8 @@ class PriorSolver:
         self.tests_df = tests_df.copy()
         if logger is None:
             self.logger = get_logger("karpiu-calibration")
+        else:
+            self.logger = logger
 
     def derive_prior(
         self,
