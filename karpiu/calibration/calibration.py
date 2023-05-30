@@ -109,7 +109,7 @@ class CalibrationProcess:
                 test_lift = self.calib_tests_df.loc[ch, "test_lift"]
                 test_lift_upper = self.calib_tests_df.loc[ch, "test_lift_upper"]
 
-                coef_prior, sigma_prior = self.solve_one_channel(
+                coef_prior, sigma_prior = self._solve_one_channel(
                     curr_model,
                     ch,
                     test_lift,
@@ -138,7 +138,7 @@ class CalibrationProcess:
                 self.solver_results.append(result_df)
 
                 # update and merge with previous priors
-                new_priors_df = self.merge_prior(curr_model, result_df)
+                new_priors_df = self._merge_prior(curr_model, result_df)
 
                 new_model = MMM(
                     kpi_col=kpi_col,
