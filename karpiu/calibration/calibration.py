@@ -21,7 +21,6 @@ class CalibrationProcess:
         sigma_prior_haircut: float = 1e-3,
         logger: Optional[logging.Logger] = None,
     ):
-
         if logger is None:
             self.logger = get_logger("karpiu-calibration")
         else:
@@ -341,7 +340,6 @@ class CalibrationProcess:
         # coef_prior: float,
         # sigma_prior: float,
     ) -> pd.DataFrame:
-
         spend_cols = model.get_spend_cols()
         # if test_channel not in spend_cols:
         #     raise Exception("Input channel is not included in the spend column(s) from the model.")
