@@ -39,12 +39,15 @@ class CalibrationProcess:
         self.n_iter_steps = 0
 
         check_flag = extended_tests_df_base["test_spend"].values <= 1e-5
-        if np.any(check_flag) :
-            drop_channels = extended_tests_df_base.loc[check_flag, "test_channel"].values
+        if np.any(check_flag):
+            drop_channels = extended_tests_df_base.loc[
+                check_flag, "test_channel"
+            ].values
             self.logger.info("Dropping zero spend channels: {}".format(drop_channels))
             extended_tests_df_base = extended_tests_df_base.loc[
-                ~extended_tests_df_base["test_channel"].isin(drop_channels)].reset_index(drop=True)
-        
+                ~extended_tests_df_base["test_channel"].isin(drop_channels)
+            ].reset_index(drop=True)
+
         # make sure there is no duplicate of channels
         channels_pool = set(extended_tests_df_base["test_channel"].to_list())
         assert len(channels_pool) == extended_tests_df_base.shape[0]
@@ -60,7 +63,7 @@ class CalibrationProcess:
         from_new: bool = False,
         fit_args: Optional[Dict] = None,
     ) -> None:
-        # TODO: implement logic when from_new is True   
+        # TODO: implement logic when from_new is True
         curr_model = deepcopy(self.curr_model)
 
         spend_cols = curr_model.get_spend_cols()
@@ -84,11 +87,13 @@ class CalibrationProcess:
             attr_report_df = self.report_attribution(curr_model, temp_reset_df)
 
             # pick up a channel based on the criteria
-            sample_channels = self.select_calib_channels(attr_report_df, se_multiplier=0.1)
+            sample_channels = self.select_calib_channels(
+                attr_report_df, se_multiplier=0.1
+            )
             if len(sample_channels) == 0:
                 self.logger.info("Meet exit condition for all channels.")
                 continue
-            
+
             rest_channels = list(self.channels_pool - set(sample_channels))
             self.logger.info("Iterations: {}/{}".format(n + 1, n_iters))
             self.logger.info("Sampled channels: {}".format(sample_channels))
@@ -99,11 +104,11 @@ class CalibrationProcess:
                 self.logger.info("Calibrating channel: {}".format(ch))
 
                 # access by test_channel as index
-                # result_df should be single row 
-                test_start = self.calib_tests_df.loc[ch, 'test_start']
-                test_end = self.calib_tests_df.loc[ch, 'test_end']
-                test_lift = self.calib_tests_df.loc[ch, 'test_lift']
-                test_lift_upper = self.calib_tests_df.loc[ch, 'test_lift_upper']
+                # result_df should be single row
+                test_start = self.calib_tests_df.loc[ch, "test_start"]
+                test_end = self.calib_tests_df.loc[ch, "test_end"]
+                test_lift = self.calib_tests_df.loc[ch, "test_lift"]
+                test_lift_upper = self.calib_tests_df.loc[ch, "test_lift_upper"]
 
                 coef_prior, sigma_prior = self.solve_one_channel(
                     curr_model,
@@ -115,15 +120,18 @@ class CalibrationProcess:
                     sigma_prior_haircut=1e-1,
                     fixed_intercept=False,
                 )
-                self.logger.info("Solved priors: ({},{})".format(
-                    coef_prior, sigma_prior
-                ))
+                self.logger.info(
+                    "Solved priors: ({},{})".format(coef_prior, sigma_prior)
+                )
 
-                result_df = pd.DataFrame({
-                    "test_channel": ch,
-                    "coef_prior": coef_prior,
-                    "sigma_prior": sigma_prior,
-                }, index=[0])
+                result_df = pd.DataFrame(
+                    {
+                        "test_channel": ch,
+                        "coef_prior": coef_prior,
+                        "sigma_prior": sigma_prior,
+                    },
+                    index=[0],
+                )
 
                 # store result
                 result_df["iter"] = self.n_iter_steps + n
@@ -131,30 +139,27 @@ class CalibrationProcess:
                 self.solver_results.append(result_df)
 
                 # update and merge with previous priors
-                new_priors_df = self.merge_prior(
-                    curr_model, 
-                    result_df
-                )
+                new_priors_df = self.merge_prior(curr_model, result_df)
 
                 new_model = MMM(
-                            kpi_col=kpi_col,
-                            date_col=date_col,
-                            spend_cols=spend_cols,
-                            event_cols=full_event_cols,
-                            # seed=seed,
-                            seasonality=seasonality,
-                            fs_orders=fs_orders,
-                            adstock_df=adstock_df,
-                            logger=curr_model.get_logger(),
-                            # no market sigma constraint here to allow flexibility
-                        )
+                    kpi_col=kpi_col,
+                    date_col=date_col,
+                    spend_cols=spend_cols,
+                    event_cols=full_event_cols,
+                    # seed=seed,
+                    seasonality=seasonality,
+                    fs_orders=fs_orders,
+                    adstock_df=adstock_df,
+                    logger=curr_model.get_logger(),
+                    # no market sigma constraint here to allow flexibility
+                )
                 df = curr_model.get_raw_df()
 
                 new_model.set_features(curr_model.get_event_cols())
                 new_model.set_hyper_params(curr_model.best_params)
                 new_model.set_saturation(curr_model.get_saturation())
                 new_model.fit(
-                    df, 
+                    df,
                     extra_priors=new_priors_df,
                     **fit_args,
                 )
@@ -173,15 +178,19 @@ class CalibrationProcess:
                 self.calib_reports.append(calib_report)
 
                 n_steps += 1
-            
+
         self.curr_model = deepcopy(curr_model)
         self.n_fit_steps += n_steps
         self.n_iter_steps += n_iters
-    
+
     def get_calib_report(self):
         calib_report = pd.concat(self.calib_reports).reset_index(drop=True)
-        calib_report["input_cost_upper_1se"] = calib_report["test_icac"] +  calib_report["test_se"]
-        calib_report["input_cost_lower_1se"] = calib_report["test_icac"] -  calib_report["test_se"]
+        calib_report["input_cost_upper_1se"] = (
+            calib_report["test_icac"] + calib_report["test_se"]
+        )
+        calib_report["input_cost_lower_1se"] = (
+            calib_report["test_icac"] - calib_report["test_se"]
+        )
         return calib_report
 
     def get_solver_result(self):
@@ -198,7 +207,7 @@ class CalibrationProcess:
         attr_report_df: pd.DataFrame,
         se_multiplier: float = 0.1,
     ) -> List[str]:
-        """Given a attribution report dataframe, recommend and return 
+        """Given a attribution report dataframe, recommend and return
         the list of channels should be calibrated
 
         Args:
@@ -210,14 +219,14 @@ class CalibrationProcess:
         """
         result_df = attr_report_df.copy()
         select_flag = np.logical_not(
-            np.abs(result_df["mmm_icac"] - result_df["test_icac"]) <=
-            result_df["test_se"] * se_multiplier
+            np.abs(result_df["mmm_icac"] - result_df["test_icac"])
+            <= result_df["test_se"] * se_multiplier
         )
         return result_df.loc[select_flag, "test_channel"].values
 
     def report_attribution(
         self,
-        model: MMM, 
+        model: MMM,
         ab_tests_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """_summary_
@@ -252,9 +261,7 @@ class CalibrationProcess:
         return new_ab_tests_df
 
     def extra_model_info(
-            self,
-            model: MMM, 
-            attr_report_df: pd.DataFrame
+        self, model: MMM, attr_report_df: pd.DataFrame
     ) -> pd.DataFrame:
         """Given a fitted model and the target data frame, attach regression
         related information to the end result data frame and return it.
@@ -271,19 +278,21 @@ class CalibrationProcess:
         ]
         regression_summary = regression_summary.rename(
             columns={
-                "regressor": "test_channel", 
+                "regressor": "test_channel",
                 "loc_prior": "coef_prior",
                 "scale_prior": "sigma_prior",
                 "coef_p50": "coef_posterior",
             }
         )
 
-        attr_report_df = pd.merge(attr_report_df, regression_summary, how="inner", on="test_channel")
+        attr_report_df = pd.merge(
+            attr_report_df, regression_summary, how="inner", on="test_channel"
+        )
         return attr_report_df
 
     def compute_test_stat(
         self,
-        model: MMM, 
+        model: MMM,
         ab_tests_df: pd.DataFrame,
     ) -> pd.DataFrame:
         """_summary_
@@ -310,10 +319,7 @@ class CalibrationProcess:
             test_se = row["test_se"]
 
             # derive test spend
-            mask = (
-                df[date_col] >= test_start) & (
-                df[date_col] <= test_end
-            )
+            mask = (df[date_col] >= test_start) & (df[date_col] <= test_end)
             sub_input_df = df[mask].reset_index(drop=True)
             test_spend = sub_input_df[test_channel].sum()
             # derive lift from spend data from model to ensure consistency
@@ -322,7 +328,6 @@ class CalibrationProcess:
             test_lift_upper = test_spend / (test_icac - test_se)
             new_ab_tests_df.loc[idx, "test_spend"] = test_spend
             new_ab_tests_df.loc[idx, "test_lift_upper"] = test_lift_upper
-
 
         return new_ab_tests_df
 
@@ -340,11 +345,13 @@ class CalibrationProcess:
         spend_cols = model.get_spend_cols()
         # if test_channel not in spend_cols:
         #     raise Exception("Input channel is not included in the spend column(s) from the model.")
-        
-        new_prior_df = model.get_regression_summary()[["regressor", "loc_prior", "scale_prior"]]
+
+        new_prior_df = model.get_regression_summary()[
+            ["regressor", "loc_prior", "scale_prior"]
+        ]
         new_prior_df = new_prior_df.rename(
             columns={
-                "regressor": "test_channel", 
+                "regressor": "test_channel",
                 "loc_prior": "coef_prior",
                 "scale_prior": "sigma_prior",
             }
@@ -356,17 +363,14 @@ class CalibrationProcess:
         # print(new_ab_tests_df.head(10))
         # print(new_prior_df.head(10))
         new_prior_df.loc[
-            new_ab_tests_df["test_channel"].values,
-            "coef_prior"
+            new_ab_tests_df["test_channel"].values, "coef_prior"
         ] = new_ab_tests_df["coef_prior"].values
         new_prior_df.loc[
-            new_ab_tests_df["test_channel"].values,
-            "sigma_prior"
+            new_ab_tests_df["test_channel"].values, "sigma_prior"
         ] = new_ab_tests_df["sigma_prior"].values
         new_prior_df = new_prior_df.reset_index()
         # print(new_prior_df.head(10))
         return new_prior_df
-
 
     # test_channel, coef_prior, sigma_prior are the reserved keywords in main model
     # TODO: consider make them consistent later
@@ -374,10 +378,10 @@ class CalibrationProcess:
         self,
         model: MMM,
         test_channel: str,
-        test_lift: float, 
-        test_lift_upper: float, 
-        test_start: str, 
-        test_end: str, 
+        test_lift: float,
+        test_lift_upper: float,
+        test_start: str,
+        test_end: str,
         sigma_prior_haircut: float,
         fixed_intercept: bool,
     ) -> Tuple[float, float]:
@@ -398,7 +402,7 @@ class CalibrationProcess:
             res = np.sum(spend_attr_df.loc[mask, test_channel].values)
             loss = np.fabs(res - target)
             return loss
-        
+
         # minimize approach
         # init_search_pt = max(
         #     model.get_coef_vector([test_channel]),
@@ -423,7 +427,7 @@ class CalibrationProcess:
         #     args=test_lift,
         # )
         # coef_prior = sol.x[0]
-        
+
         # sol = optim.minimize(
         #     attr_call_back,
         #     x0=init_search_pt,
@@ -463,8 +467,6 @@ class CalibrationProcess:
         # prevent underflow
         sigma_prior = max(sigma_prior * sigma_prior_haircut, 1e-5)
         # non-negative coef
-        coef_prior = max(coef_prior, 0.)
+        coef_prior = max(coef_prior, 0.0)
 
         return coef_prior, sigma_prior
-
-

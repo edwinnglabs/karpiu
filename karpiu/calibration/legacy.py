@@ -199,7 +199,9 @@ def calibrate_model_with_test(
     for n in range(n_iter):
         logger.info("{}/{} iteration:".format(n + 1, n_iter))
         # shuffle is not impacting as we solve all priors from same initial model
-        curr_priors_full = ps.derive_prior(prev_model, shuffle=False, fixed_intercept=False)
+        curr_priors_full = ps.derive_prior(
+            prev_model, shuffle=False, fixed_intercept=False
+        )
         # curr_priors_full has row for each test
         # curr_priors_unique has row for each channel only (combining all tests within a channel)
         # len(validation_dfs_list) = number of runs
