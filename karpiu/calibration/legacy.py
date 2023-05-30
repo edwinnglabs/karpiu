@@ -1,17 +1,20 @@
+"""
+Legacy code here; Plan to deprecate soon.
+"""
+import scipy.optimize as optim
 import numpy as np
 import pandas as pd
-from scipy.optimize import fsolve
 from copy import deepcopy
 import logging
 import matplotlib
 import matplotlib.pyplot as plt
 import math
+
 from typing import Optional, Dict, Any, Tuple
 
-
-from .explainability import AttributorBeta
-from .models import MMM
-from .utils import get_logger
+from ..explainability import AttributorBeta
+from ..models import MMM
+from ..utils import get_logger
 
 
 class PriorSolver:
@@ -29,7 +32,7 @@ class PriorSolver:
         model: MMM,
         shuffle: bool = False,
         debug: bool = False,
-        fixed_intercept: bool = False,
+        fixed_intercept: bool = True,
     ) -> pd.DataFrame:
         """Solving priors independently (and sequentially) based on each coefficients loc and scale input.
 
@@ -104,23 +107,32 @@ class PriorSolver:
                     return loss
 
                 init_search_pt = model.get_coef_vector([test_channel])
-                coef_prior = fsolve(
+                self.logger.info("Initial point: {:.5f}".format(init_search_pt[0]))
+                bounds = optim.Bounds(
+                    np.zeros(1),
+                    np.ones(1) * np.inf,
+                )
+                sol = optim.minimize(
                     attr_call_back,
                     x0=init_search_pt,
                     args=test_lift,
-                )[0]
-                coef_prior_upper = fsolve(
+                    bounds=bounds,
+                )
+                coef_prior = sol.x[0]
+                coef_prior_upper = optim.minimize(
                     attr_call_back,
                     x0=init_search_pt,
                     args=test_lift_upper,
-                )[0]
+                    bounds=bounds,
+                )
+                coef_prior_upper = sol.x[0]
                 self.logger.info(
                     "test spend: {:.3f}, test lift: {:.3f}".format(
                         test_spend, test_lift
                     )
                 )
                 sigma_prior = coef_prior_upper - coef_prior
-                sigma_prior = max(sigma_prior, 1e-3)
+                sigma_prior = max(sigma_prior, 1e-5)
 
                 self.logger.info(
                     "coef prior: {:.3f}, sigma prior: {:.3f}".format(
@@ -187,7 +199,7 @@ def calibrate_model_with_test(
     for n in range(n_iter):
         logger.info("{}/{} iteration:".format(n + 1, n_iter))
         # shuffle is not impacting as we solve all priors from same initial model
-        curr_priors_full = ps.derive_prior(prev_model, shuffle=False)
+        curr_priors_full = ps.derive_prior(prev_model, shuffle=False, fixed_intercept=False)
         # curr_priors_full has row for each test
         # curr_priors_unique has row for each channel only (combining all tests within a channel)
         # len(validation_dfs_list) = number of runs
@@ -308,7 +320,7 @@ def calibrate_model_with_test(
                     continue
 
                 attr_obj = AttributorBeta(new_model, start=test_start, end=test_end)
-                attr_res = attr_obj.make_attribution(fixed_intercept=False)
+                attr_res = attr_obj.make_attribution(fixed_intercept=True)
                 _, spend_attr_df, _, _ = attr_res
                 mask = (spend_attr_df[date_col] >= test_start) & (
                     spend_attr_df[date_col] <= test_end
@@ -347,43 +359,6 @@ def calibrate_model_with_test(
     else:
         calibration_report = pd.concat(validation_dfs_list, axis=0, ignore_index=True)
         return new_model, calibration_report
-
-
-def make_cost_calibration_plot(report_df: pd.DataFrame) -> matplotlib.axes:
-    """Visualize cost calibration given report dataframe"""
-    test_names = report_df["test_name"].unique().tolist()
-    nrows = math.ceil(len(test_names) / 2)
-    fig, axes = plt.subplots(nrows, 2, figsize=(20, 2 + 3.5 * nrows))
-    axes = axes.flatten()
-    for idx, name in enumerate(test_names):
-        mask = report_df["test_name"] == name
-        x = report_df.loc[mask, "iteration"].values
-        y_input = report_df.loc[mask, "input_cost"].values
-        y_solver = report_df.loc[mask, "solver_cost"].values
-        y_input_upper = report_df.loc[mask, "input_cost_upper_1se"].values
-        y_input_lower = report_df.loc[mask, "input_cost_lower_1se"].values
-        axes[idx].set_title(name)
-        axes[idx].plot(x, y_solver, label="solver", color="orange", alpha=0.5)
-        axes[idx].plot(
-            x, y_input, linestyle="--", label="input", color="dodgerblue", alpha=0.5
-        )
-        axes[idx].fill_between(
-            x, y_input_lower, y_input_upper, alpha=0.2, color="dodgerblue"
-        )
-
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(
-        handles,
-        labels,
-        loc="lower center",
-        bbox_to_anchor=(0.0, 0.05, 1.0, 1.0),
-        fancybox=True,
-        shadow=True,
-        ncols=2,
-        fontsize=18,
-    )
-    plt.close()
-    return axes
 
 
 def make_coef_calibration_plot(report_df: pd.DataFrame) -> matplotlib.axes:
