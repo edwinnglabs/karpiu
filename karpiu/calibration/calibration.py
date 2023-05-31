@@ -12,7 +12,8 @@ from ..explainability import AttributorBeta
 from ..models import MMM
 from ..utils import get_logger
 
-#TODO: factor important keys and strings as ENUM / constants
+
+# TODO: factor important keys and strings as ENUM / constants
 class CalibrationProcess:
     def __init__(
         self,
@@ -86,7 +87,9 @@ class CalibrationProcess:
             attr_report_df = self.report_attribution(curr_model, temp_reset_df)
 
             # pick up a channel based on the criteria
-            sample_channels = self.select_calib_channels(attr_report_df, se_multiplier=0.1)
+            sample_channels = self.select_calib_channels(
+                attr_report_df, se_multiplier=0.1
+            )
             if len(sample_channels) == 0:
                 self.logger.info("Meet exit condition for all channels.")
                 continue
@@ -204,25 +207,34 @@ class CalibrationProcess:
         fig, axes = plt.subplots(nrows, 2, figsize=(20, 2 + 3.5 * nrows))
         axes = axes.flatten()
         for idx, ch in enumerate(test_channels):
-            mask = calib_report_df['test_channel'] == ch
-            x = calib_report_df.loc[mask, 'n_step'].values
-            y_input = calib_report_df.loc[mask, 'test_icac'].values
-            y_solver = calib_report_df.loc[mask, 'mmm_icac'].values
-            y_input_upper = calib_report_df.loc[mask, 'input_cost_upper_1se'].values
-            y_input_lower = calib_report_df.loc[mask, 'input_cost_lower_1se'].values
+            mask = calib_report_df["test_channel"] == ch
+            x = calib_report_df.loc[mask, "n_step"].values
+            y_input = calib_report_df.loc[mask, "test_icac"].values
+            y_solver = calib_report_df.loc[mask, "mmm_icac"].values
+            y_input_upper = calib_report_df.loc[mask, "input_cost_upper_1se"].values
+            y_input_lower = calib_report_df.loc[mask, "input_cost_lower_1se"].values
             axes[idx].set_title(ch)
-            axes[idx].plot(x, y_solver, label='solver', color='orange', alpha=0.5)
-            axes[idx].plot(x, y_input, linestyle='--', label='input', color='dodgerblue', alpha=0.5)
-            axes[idx].fill_between(x, y_input_lower, y_input_upper, alpha=0.2, color='dodgerblue')
+            axes[idx].plot(x, y_solver, label="solver", color="orange", alpha=0.5)
+            axes[idx].plot(
+                x, y_input, linestyle="--", label="input", color="dodgerblue", alpha=0.5
+            )
+            axes[idx].fill_between(
+                x, y_input_lower, y_input_upper, alpha=0.2, color="dodgerblue"
+            )
 
-        fig.suptitle("Cost Calibration", y=0.92, fontsize=28, verticalalignment="center")
+        fig.suptitle(
+            "Cost Calibration", y=0.92, fontsize=28, verticalalignment="center"
+        )
 
         handles, labels = axes[0].get_legend_handles_labels()
         fig.legend(
-            handles, labels, 
-            loc='lower center',
-            bbox_to_anchor=(0., 0.05, 1., 1.),
-            fancybox=True, shadow=True, ncols=2,
+            handles,
+            labels,
+            loc="lower center",
+            bbox_to_anchor=(0.0, 0.05, 1.0, 1.0),
+            fancybox=True,
+            shadow=True,
+            ncols=2,
             fontsize=18,
         )
 
@@ -241,25 +253,41 @@ class CalibrationProcess:
         fig, axes = plt.subplots(nrows, 2, figsize=(20, 2 + 3.5 * nrows))
         axes = axes.flatten()
         for idx, ch in enumerate(test_channels):
-            mask = calib_report_df['test_channel'] == ch
-            x = calib_report_df.loc[mask, 'n_step'].values
-            y_priors = calib_report_df.loc[mask, 'coef_prior'].values
-            y_posteriors = calib_report_df.loc[mask, 'coef_posterior'].values
-            y_priors_upper = y_priors + calib_report_df.loc[mask, 'sigma_prior'].values
-            y_priors_lower = y_priors - calib_report_df.loc[mask, 'sigma_prior'].values
+            mask = calib_report_df["test_channel"] == ch
+            x = calib_report_df.loc[mask, "n_step"].values
+            y_priors = calib_report_df.loc[mask, "coef_prior"].values
+            y_posteriors = calib_report_df.loc[mask, "coef_posterior"].values
+            y_priors_upper = y_priors + calib_report_df.loc[mask, "sigma_prior"].values
+            y_priors_lower = y_priors - calib_report_df.loc[mask, "sigma_prior"].values
             axes[idx].set_title(ch)
-            axes[idx].plot(x, y_posteriors, label='posteriors', color='orange', alpha=0.5)
-            axes[idx].plot(x, y_priors, linestyle='--', label='priors', color='dodgerblue', alpha=0.5)
-            axes[idx].fill_between(x, y_priors_lower, y_priors_upper, alpha=0.2, color='dodgerblue')
+            axes[idx].plot(
+                x, y_posteriors, label="posteriors", color="orange", alpha=0.5
+            )
+            axes[idx].plot(
+                x,
+                y_priors,
+                linestyle="--",
+                label="priors",
+                color="dodgerblue",
+                alpha=0.5,
+            )
+            axes[idx].fill_between(
+                x, y_priors_lower, y_priors_upper, alpha=0.2, color="dodgerblue"
+            )
 
-        fig.suptitle("Coefficient Calibration", y=0.92, fontsize=24, verticalalignment="center")
-        
+        fig.suptitle(
+            "Coefficient Calibration", y=0.92, fontsize=24, verticalalignment="center"
+        )
+
         handles, labels = axes[0].get_legend_handles_labels()
         fig.legend(
-            handles, labels, 
-            loc='lower center',
-            bbox_to_anchor=(0., 0.05, 1., 1.),
-            fancybox=True, shadow=True, ncols=2,
+            handles,
+            labels,
+            loc="lower center",
+            bbox_to_anchor=(0.0, 0.05, 1.0, 1.0),
+            fancybox=True,
+            shadow=True,
+            ncols=2,
             fontsize=18,
         )
 
@@ -269,7 +297,6 @@ class CalibrationProcess:
             plt.close()
 
         return axes
-        
 
     def select_calib_channels(
         self,
