@@ -48,6 +48,7 @@ class MMM:
         total_market_sigma_prior: float = None,
         default_spend_sigma_prior: float = 0.1,
         logger: Optional[logging.Logger] = None,
+        fit_args: Optional[Dict[str, float]] = None,
         **kwargs
     ):
         """
@@ -58,7 +59,13 @@ class MMM:
             adstock_df: dataframe in a specific format describing the adstock
             control_feat_cols: optional; features for control
             event_cols: optional; events to include for time-series forecast
+            seasonality: list of seasonalities to pass to the model
             fs_orders: orders of fourier terms; used in seasonality
+            total_market_sigma_prior: a prior constraint for the total spend/channels regression coefficients
+            default_spend_sigma_prior: a default prior if spend/channels prior are not provided in the extra_priors arg
+            during fit function call
+            fit_args: a dict to pre-store fit args such as num_warmup, num_sample and chains etc. Note that this is
+            not used in other fitting process such as hyper-parameters tuning; it is ONLY used in the regular fit call
             **kwargs:
         """
 
@@ -113,6 +120,7 @@ class MMM:
 
         self.extra_priors = None
         self._model = None
+        self.fit_args = fit_args
 
         # for complex seasonality
         self.fs_cols_flatten = list()
@@ -425,6 +433,14 @@ class MMM:
     ) -> None:
         self.logger.info("Fit final model.")
 
+        # override if fit args are already supplied
+        if "num_warmup" in self.fit_args.keys():
+            num_warmup = self.fit_args["num_warmup"]
+        if "num_sample" in self.fit_args.keys():
+            num_sample = self.fit_args["num_sample"]
+        if "chains" in self.fit_args.keys():
+            chains = self.fit_args["chains"]
+
         if self.saturation_df is None:
             self.derive_saturation(df)
 
@@ -508,7 +524,7 @@ class MMM:
             )
             reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
             reg_scheme = reg_scheme.set_index("regressor")
-            n_spend_cols = len(self.spend_cols)
+            
             # make total market sigma weighted by original coef size
             reg_coefs = reg_coef_dfs.loc[self.spend_cols, "coefficient"].values
             spend_sigma_prior = list(
@@ -545,7 +561,6 @@ class MMM:
                 **self.best_params,
                 **kwargs,
             )
-            # self._model.fit(transform_df)
             self._model.fit(transform_df, point_method="median")
 
         self.regression_scheme = reg_scheme
