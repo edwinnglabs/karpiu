@@ -120,7 +120,14 @@ class MMM:
 
         self.extra_priors = None
         self._model = None
-        self.fit_args = fit_args
+        if fit_args is None:
+            self.fit_args = {
+                "chains": 1,
+                "num_warmup": 400,
+                "num_sample": 400,
+            }
+        else:
+            self.fit_args = fit_args
 
         # for complex seasonality
         self.fs_cols_flatten = list()
@@ -425,20 +432,20 @@ class MMM:
         self,
         df: pd.DataFrame,
         extra_priors: Optional[pd.DataFrame] = None,
-        num_warmup: int = 400,
-        num_sample: int = 100,
-        chains: int = 1,
+        num_warmup: Optional[int] = None,
+        num_sample: Optional[int] = None,
+        chains: Optional[int] = None,
         stan_mcmc_args: Optional[Dict[str, Any]] = None,
         **kwargs
     ) -> None:
         self.logger.info("Fit final model.")
 
-        # override if fit args are already supplied
-        if "num_warmup" in self.fit_args.keys():
+        # if not provided, use params from default fit args are already supplied during initialization
+        if num_warmup is None:
             num_warmup = self.fit_args["num_warmup"]
-        if "num_sample" in self.fit_args.keys():
+        if num_sample is None:
             num_sample = self.fit_args["num_sample"]
-        if "chains" in self.fit_args.keys():
+        if chains is None:
             chains = self.fit_args["chains"]
 
         if self.saturation_df is None:
@@ -524,7 +531,7 @@ class MMM:
             )
             reg_scheme["regressor_coef_prior"] = [0.0] * reg_scheme.shape[0]
             reg_scheme = reg_scheme.set_index("regressor")
-            
+
             # make total market sigma weighted by original coef size
             reg_coefs = reg_coef_dfs.loc[self.spend_cols, "coefficient"].values
             spend_sigma_prior = list(
