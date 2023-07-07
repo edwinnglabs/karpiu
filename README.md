@@ -12,7 +12,7 @@ For usage, users can refer to this [documentation](https://edwinng.com/karpiu/).
 # Installation
 
 To access the development version, please follow the below instructions or simply use `make install-dev` 
-after cloning the repository.  The package only supports``orbit>=1.1.4` which requires `cmdstanpy`. 
+after cloning the repository.  The package only supports`orbit>=1.1.4` which requires `cmdstanpy`. 
 
 ```bash
 $ git clone https://github.com/edwinnglabs/karpiu.git
