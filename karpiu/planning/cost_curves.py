@@ -7,6 +7,7 @@ from typing import Optional, List, Union, Dict, Literal
 from copy import deepcopy
 from ..explainability import AttributorBeta
 import logging
+import matplotlib
 
 logger = logging.getLogger("karpiu-planning")
 
@@ -119,23 +120,23 @@ class CostCurves:
 
     def derive_multipliers(
         self,
-        extend_multiplier=1.0,
-    ):
-        # compute flat multiplier if it is an overall cost curves
-        # otherwise, compute cost curves based on max spend across all channels
-        # with the max multiplier
+        max_multiplier=1.0,
+    ) -> Union[Dict[str, np.ndarray], np.ndarray]:
+        # 1. if "overall" cost curve is specified,
+        # compute a list of multipliers with linear space (0, max_multiplier); 
+        # insert "1." to guarantee current spend captured
+        # 2. if "individual" cost curves are specified,
+        # back solve multipliers arrays based on max spend * max_multiplier;
+        # so that each channel simulation ends at max channel spend * max_multiplier
+        # insert "1." to guarantee current spend captured; cost curves are stored as Dict
         if self.curve_type == "overall":
-            multipliers = np.sort(
-                np.unique(
-                    np.concatenate(
-                        [np.ones(1), np.linspace(0.0, extend_multiplier, self.n_steps)]
-                    )
-                )
+            seq =  np.concatenate(
+                [np.ones(1), np.linspace(0.0, max_multiplier ** 0.5, self.n_steps)]
             )
+            multipliers = np.square(np.sort(np.unique(seq)))
         elif self.curve_type == "individual":
-            multipliers_arr = self.max_spend * extend_multiplier / self.total_spend_arr
+            multipliers_arr = self.max_spend * max_multiplier / self.total_spend_arr
             multipliers = {
-                # always make sure we have an additional "1" for current spend
                 k: np.sort(
                     np.unique(
                         np.concatenate([np.ones(1), np.linspace(0.0, m, self.n_steps)])
@@ -149,7 +150,8 @@ class CostCurves:
         return multipliers
 
     def generate_cost_curves(
-        self, multipliers: Optional[Union[List[float], Dict[str, float]]] = None
+        self, 
+        multipliers: Optional[Union[List[float], Dict[str, float]]] = None
     ) -> pd.DataFrame:
         if multipliers is None:
             multipliers = self.get_multipliers()
@@ -281,7 +283,7 @@ class CostCurves:
         plot_margin: float = 0.05,
         is_visible: bool = True,
         include_organic: bool = True,
-    ) -> None:
+    ) -> matplotlib.axes.Axes:
         """plot cost curves
 
         Args:

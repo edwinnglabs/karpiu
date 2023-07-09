@@ -5,7 +5,7 @@ from ...utils import adstock_process
 
 
 class TargetMaximizer(BudgetOptimizer):
-    """Perform optimization with a given Marketing Mix Model"""
+    """Perform target maximization with a given Marketing Mix Model"""
 
     def __init__(self, variance_penalty: float = 1e-3, **kwargs):
         super().__init__(**kwargs)
