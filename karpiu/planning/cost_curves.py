@@ -123,15 +123,15 @@ class CostCurves:
         max_multiplier=1.0,
     ) -> Union[Dict[str, np.ndarray], np.ndarray]:
         # 1. if "overall" cost curve is specified,
-        # compute a list of multipliers with linear space (0, max_multiplier); 
+        # compute a list of multipliers with linear space (0, max_multiplier);
         # insert "1." to guarantee current spend captured
         # 2. if "individual" cost curves are specified,
         # back solve multipliers arrays based on max spend * max_multiplier;
         # so that each channel simulation ends at max channel spend * max_multiplier
         # insert "1." to guarantee current spend captured; cost curves are stored as Dict
         if self.curve_type == "overall":
-            seq =  np.concatenate(
-                [np.ones(1), np.linspace(0.0, max_multiplier ** 0.5, self.n_steps)]
+            seq = np.concatenate(
+                [np.ones(1), np.linspace(0.0, max_multiplier**0.5, self.n_steps)]
             )
             multipliers = np.square(np.sort(np.unique(seq)))
         elif self.curve_type == "individual":
@@ -150,8 +150,7 @@ class CostCurves:
         return multipliers
 
     def generate_cost_curves(
-        self, 
-        multipliers: Optional[Union[List[float], Dict[str, float]]] = None
+        self, multipliers: Optional[Union[List[float], Dict[str, float]]] = None
     ) -> pd.DataFrame:
         if multipliers is None:
             multipliers = self.get_multipliers()

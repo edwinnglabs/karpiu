@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 from scipy import stats
@@ -7,14 +8,13 @@ import arviz as az
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.stats.stattools import durbin_watson
 
+from .models import MMM
+
 """ Diagnostic tools for MMM model object
 """
 
 
-def check_residuals(model):
-    # TODO:
-    # assert model instance is the one stage model
-
+def check_residuals(model: MMM):
     max_adstock = model.get_max_adstock()
     df = model.raw_df.copy()
     pred = model.predict(df, decompose=False)
@@ -44,14 +44,12 @@ def check_residuals(model):
     fig.tight_layout()
 
 
-def check_stationarity(model):
+def check_stationarity(model: MMM):
     # 1. Run [Augmented Dicker-Fuller test](https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test),
     # it needs to reject the null which means unit root is not present.
     # 2. Check [Durbin-Watson Stat](https://en.wikipedia.org/wiki/Durbin%E2%80%93Watson_statistic),
     # the closer to `2`, the better.
 
-    # TODO:
-    # assert model instance is the one stage model
     max_adstock = model.get_max_adstock()
     df = model.raw_df.copy()
     pred = model.predict(df, decompose=False)
@@ -71,7 +69,7 @@ def check_stationarity(model):
     print("Durbin-Watson Stat: {:.3f} Recommended Values:(|x - 2|>=1.0".format(dw_stat))
 
 
-def check_convergence(model):
+def check_convergence(model: MMM):
     posetriors = model._model.get_posterior_samples(relabel=True, permute=False)
     spend_cols = model.get_spend_cols()
 
