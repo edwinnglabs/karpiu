@@ -5,6 +5,7 @@ import numpy as np
 
 from .models import MMM
 
+from typing import Tuple, List, Optional
 
 ORGANIC_COL = "organic"
 
@@ -39,18 +40,26 @@ class ColorConstants:
         # purple
         "#FFC6FF",
     ]
-
+    ANITA_SIX = [
+        "#5C7DD2",
+        "#6587D9",
+        "#8DABE3",
+        "#9EBDE3",
+        "#C9D2EE",
+        "#E4E5FB",
+    ]
 
 def plot_attribution_waterfall(
     model: MMM,
     attr_df: pd.DataFrame,
-    figsize=None,
-    colors=None,
-    show=True,
-    include_organic=True,
-    alpha=0.8,
-    grid_on=True,
-    frame_on=False,
+    figsize: Optional[Tuple] = None,
+    colors: List[str] = None,
+    show: bool = True,
+    include_organic: bool = True,
+    alpha: float = 0.8,
+    grid_on: bool = True,
+    frame_on: bool = False,
+    height: float = 1.0,
 ):
     if figsize is None:
         figsize = (16, 8)
@@ -85,6 +94,7 @@ def plot_attribution_waterfall(
         color=colors,
         alpha=alpha,
         align="center",
+        height=height,
     )
 
     ax.xaxis.set_major_formatter(mtick.PercentFormatter())
@@ -112,14 +122,14 @@ def plot_attribution_waterfall(
 def plot_attribution_with_time(
     model: MMM,
     attr_df: pd.DataFrame,
-    figsize=None,
-    colors=None,
-    show=True,
-    dt_col="date",
-    include_organic=True,
-    alpha=0.8,
-    grid_on=True,
-    frame_on=False,
+    figsize: Optional[Tuple] = None,
+    colors: List[str] = None,
+    show: bool = True,
+    dt_col: str = "date",
+    include_organic: bool = True,
+    alpha: float = 0.8,
+    grid_on: bool = True,
+    frame_on: bool = False,
 ):
     if figsize is None:
         figsize = (16, 8)

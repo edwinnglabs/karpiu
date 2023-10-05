@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
-from typing import Optional, List, Union, Dict, Literal
+from typing import Optional, List, Union, Dict, Literal, Tuple
 from copy import deepcopy
 from ..explainability import AttributorBeta
 import logging
@@ -13,7 +13,7 @@ logger = logging.getLogger("karpiu-planning")
 
 from ..models import MMM
 
-
+# TODO: need unit test on cost curves class
 class CostCurves:
     def __init__(
         self,
@@ -97,13 +97,13 @@ class CostCurves:
         else:
             if curve_type == "overall":
                 self.multipliers = self.derive_multipliers(
-                    extend_multiplier=extend_multiplier
+                    max_multiplier=extend_multiplier
                 )
             elif curve_type == "individual":
                 # since all the small channels can compare with the largest spend channel
                 # we don't need to extend by default
                 self.multipliers = self.derive_multipliers(
-                    extend_multiplier=extend_multiplier
+                    max_multiplier=extend_multiplier
                 )
         # will be generated under generate_cost_curves
         self.cost_curves = None
@@ -282,6 +282,9 @@ class CostCurves:
         plot_margin: float = 0.05,
         is_visible: bool = True,
         include_organic: bool = True,
+        figsize: Optional[Tuple] = None,
+        frame_on: bool = False,
+        point_size: float = 160,
     ) -> matplotlib.axes.Axes:
         """plot cost curves
 
@@ -320,11 +323,19 @@ class CostCurves:
             y_max = max(y_max, y_max2)
 
         if self.curve_type == "individual":
+            if figsize is None:
+                figsize=(18, nrows * 4.5)
             # multiple cost curves
-            fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=(18, nrows * 4.5))
+            fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=figsize)
             axes = axes.flatten()
 
-            for idx, ch in enumerate(self.channels):
+            for idx, ch in enumerate(axes):
+                axes[idx].set_frame_on(frame_on)
+                if idx >= len(self.channels):
+                    continue
+
+
+                ch = self.channels[idx]
                 temp_cc = cost_curves[cost_curves["ch"] == ch].reset_index(drop=True)
                 curr_spend_mask = temp_cc["multiplier"] == 1
 
@@ -349,7 +360,7 @@ class CostCurves:
                     curr_spend,
                     curr_outcome,
                     c="orange",
-                    s=48,
+                    s=point_size,
                     label="current spend",
                 )
 
@@ -386,7 +397,7 @@ class CostCurves:
                         optim_spend,
                         optim_outcome,
                         c="green",
-                        s=48,
+                        s=point_size,
                         label="optim spend",
                     )
 
@@ -404,7 +415,10 @@ class CostCurves:
 
         elif self.curve_type == "overall":
             # single cost curve
-            fig, ax = plt.subplots(1, 1, figsize=(18, 12))
+            if figsize is None:
+                figsize=(18, 12)
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            ax.set_frame_on(frame_on)
             temp_cc = cost_curves[cost_curves["ch"] == "overall"].reset_index(drop=True)
             curr_spend_mask = temp_cc["multiplier"] == 1
             ax.plot(
@@ -425,7 +439,7 @@ class CostCurves:
                 curr_spend,
                 curr_outcome,
                 c="orange",
-                s=48,
+                s=point_size,
                 label="current spend",
             )
 
@@ -464,7 +478,7 @@ class CostCurves:
                     optim_spend,
                     optim_outcome,
                     c="green",
-                    s=48,
+                    s=point_size,
                     label="optim spend",
                 )
 

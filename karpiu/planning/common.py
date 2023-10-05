@@ -15,6 +15,8 @@ def calculate_marginal_cost(
     spend_end: str,
     spend_df: Optional[pd.DataFrame] = None,
     delta: float = 1e-5,
+    # either additive or multiplicative
+    method: str = 'multiplicative',
 ) -> pd.DataFrame:
     """Generate overall marginal cost per channel with given period [spend_start, spend_end]
     Args:
@@ -28,6 +30,9 @@ def calculate_marginal_cost(
     Returns:
 
     """
+    if method not in ['additive', 'multiplicative']:
+        raise Exception('method must be in either "additive" or "multiplicative".')
+
     if spend_df is None:
         df = model.get_raw_df()
     else:
@@ -68,6 +73,7 @@ def calculate_marginal_cost(
     # the varying comp is computed below
     marginal_cost = np.empty(len(channels))
     for idx, ch in enumerate(channels):
+
         # (calc_steps, n_regressors)
         delta_matrix = np.zeros_like(baseline_spend_matrix)
         if max_adstock > 0:
@@ -75,17 +81,27 @@ def calculate_marginal_cost(
         else:
             delta_matrix[:, idx] = delta
 
-        # (calc_steps, n_regressors)
-        new_spend_matrix = baseline_spend_matrix * (1 + delta_matrix)
+        if method == 'additive':
+            # (calc_steps, n_regressors)
+            new_spend_matrix = baseline_spend_matrix + delta_matrix
+        else:
+            # (calc_steps, n_regressors)
+            new_spend_matrix = baseline_spend_matrix * (1 + delta_matrix)
+
         new_transformed_spend_matrix = adstock_process(new_spend_matrix, adstock_matrix)
         new_transformed_spend_matrix = np.log1p(new_transformed_spend_matrix / sat_arr)
         new_reg_comp = np.sum(coef_matrix * new_transformed_spend_matrix, -1)
 
         new_pred_comp = base_comp * np.exp(new_reg_comp)
-        marginal_cost[idx] = np.sum(delta_matrix * baseline_spend_matrix) / np.sum(
-            new_pred_comp - baseline_pred_comp
-        )
-        del delta_matrix
+
+        if method == 'additive':
+            marginal_cost[idx] = np.sum(delta_matrix) / np.sum(
+                new_pred_comp - baseline_pred_comp
+            ) 
+        else:
+            marginal_cost[idx] = np.sum(delta_matrix * baseline_spend_matrix) / np.sum(
+                new_pred_comp - baseline_pred_comp
+            )
 
     return pd.DataFrame(
         {
@@ -104,6 +120,8 @@ def generate_cost_report(
     post_spend_df: pd.DataFrame,
     spend_scaler: float = 1e3,
     delta: float = 1e-1,
+    # either additive or multiplicative
+    method: str = 'additive',
 ):
     """A wrapper function combining calculation of average and marginal cost in pre and post optimization"""
     # report average and marginal cost
@@ -118,6 +136,7 @@ def generate_cost_report(
     avg_cost_df = pd.DataFrame(avg_cost_df)
     avg_cost_df.index = avg_cost_df.index.rename("regressor")
     avg_cost_df = avg_cost_df.rename(columns={0: "avg_cost"})
+    # tot_attr_df = tot_attr_df.set_index("regressor")
 
     tot_spend_df = tot_spend_df / spend_scaler
     tot_spend_df = pd.DataFrame(tot_spend_df)
@@ -131,15 +150,17 @@ def generate_cost_report(
         spend_start=start,
         spend_end=end,
         delta=delta,
+        method=method,
     )
 
     pre_opt_report = pd.concat(
-        [avg_cost_df, mc_df, tot_spend_df], axis=1, keys="regressor"
+        [avg_cost_df, mc_df, tot_spend_df, tot_attr_df], axis=1, keys="regressor"
     )
     pre_opt_report.columns = [
         "pre-opt-avg-cost",
         "pre-opt-marginal-cost",
         "pre-opt-spend",
+        "pre-opt-attr",
     ]
 
     # post-opt result
@@ -166,15 +187,17 @@ def generate_cost_report(
         channels=channels,
         spend_start=start,
         spend_end=end,
+        method=method,
     )
 
     post_opt_report = pd.concat(
-        [post_avg_cost_df, post_mc_df, optim_tot_spend_df], axis=1
+        [post_avg_cost_df, post_mc_df, optim_tot_spend_df, optim_tot_attr_df], axis=1
     )
     post_opt_report.columns = [
         "post-opt-avg-cost",
         "post-opt-marginal-cost",
         "post-opt-spend",
+        "post-opt-attr",
     ]
 
     report = pd.concat([pre_opt_report, post_opt_report], axis=1)
@@ -186,6 +209,8 @@ def generate_cost_report(
             "post-opt-marginal-cost",
             "pre-opt-spend",
             "post-opt-spend",
+            "pre-opt-attr",
+            "post-opt-attr",
         ]
     ]
     return report
