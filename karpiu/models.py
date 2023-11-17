@@ -609,8 +609,7 @@ class MMM:
         # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [
             x
-            for x in ["prediction_5", "prediction", "prediction_95"]
-            if x in pred.columns
+            for x in ["prediction_5", "prediction", "prediction_95"] if x in pred.columns
         ]
         pred[pred_tr_col] = pred[pred_tr_col].apply(np.exp)
 

@@ -122,12 +122,20 @@ class MMMShell:
         # base comp related
         df_zero = self.df.copy()
         df_zero.loc[:, self.target_regressors] = 0.0
-        zero_pred_df = model.predict(df=df_zero, decompose=True)
+        zero_pred_df = model.predict(df=df_zero)
+        full_pred_df = model.predict(df=df)
+        resid =  - full_pred_df
+
+        # we also need to include the residual terms during the training period
+        # prevent over-under bias in the fitting obs realization
 
         # prediction when all target regressors are set to zero
-
         # (n_calc_steps, )
-        self.base_comp_calc = zero_pred_df.loc[self.calc_mask, "prediction"].values
+        self.base_comp_calc = (
+            zero_pred_df.loc[self.calc_mask, "prediction"].values +
+            (df[self.calc_mask, model.response_col].values - 
+            full_pred_df[self.calc_mask, "prediction"].values)
+        )
         # (n_result_steps, )
         self.base_comp_result = zero_pred_df.loc[self.result_mask, "prediction"].values
         # (n_input_steps, )
