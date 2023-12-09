@@ -98,7 +98,7 @@ class BudgetOptimizer(MMMShellLegacy):
         # derive budget constraints based on total sum of init values
         # scipy.optimize.LinearConstraint notation: lb <= A.dot(x) <= ub
         total_budget_constraint = optim.LinearConstraint(
-            A=np.ones(self.n_budget_steps * self.optim_channels),
+            A=np.ones(self.n_budget_steps * self.n_optim_channels),
             lb=np.zeros(1),
             # lb=np.ones(1) * total_budget / self.spend_scaler,
             ub=np.ones(1) * total_budget / self.spend_scaler,
