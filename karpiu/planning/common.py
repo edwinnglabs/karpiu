@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 
 from ..models import MMM
 from ..utils import adstock_process
-from ..explainability import AttributorBeta
+from ..explainability import AttributorGamma
 
 
 def calculate_marginal_cost(
@@ -113,7 +113,7 @@ def calculate_marginal_cost(
 
 def generate_cost_report(
     model: MMM,
-    channels: List[str],
+    # channels: List[str],
     start: str,
     end: str,
     pre_spend_df: pd.DataFrame,
@@ -126,10 +126,9 @@ def generate_cost_report(
     """A wrapper function combining calculation of average and marginal cost in pre and post optimization"""
     # report average and marginal cost
     # pre-opt result
-    attr_obj = AttributorBeta(model, attr_regressors=channels, start=start, end=end)
-    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution(
-        true_up=False, fixed_intercept=True
-    )
+    channels = model.get_spend_cols()
+    attr_obj = AttributorGamma(model, start=start, end=end)
+    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution()
     tot_attr_df = spend_attr_df[channels].apply(np.sum, axis=0)
     tot_spend_df = spend_df[channels].apply(np.sum, axis=0)
     avg_cost_df = tot_spend_df / tot_attr_df
@@ -164,12 +163,8 @@ def generate_cost_report(
     ]
 
     # post-opt result
-    attr_obj = AttributorBeta(
-        model, df=post_spend_df, attr_regressors=channels, start=start, end=end
-    )
-    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution(
-        true_up=False, fixed_intercept=True
-    )
+    attr_obj = AttributorGamma(model, df=post_spend_df, start=start, end=end)
+    _, spend_attr_df, spend_df, _ = attr_obj.make_attribution()
     optim_tot_attr_df = spend_attr_df[channels].apply(np.sum, axis=0)
     optim_tot_spend_df = spend_df[channels].apply(np.sum, axis=0)
     post_avg_cost_df = optim_tot_spend_df / optim_tot_attr_df
@@ -226,16 +221,16 @@ def simulate_net_profits(
     budget_start: str,
     budget_end: str,
     ltv_arr: Union[List[float], np.ndarray],
-    delta: float = 1e-1,
+    delta: float = 1e-3,
 ) -> pd.DataFrame:
-    attr_obj = AttributorBeta(
+    attr_obj = AttributorGamma(
         model=model,
-        attr_regressors=channels,
+        # attr_regressors=channels,
         start=budget_start,
         end=budget_end,
         df=spend_df,
     )
-    res = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+    res = attr_obj.make_attribution()
     date_col = model.date_col
 
     _, baseline_spend_attr_df, baseline_spend_df, _ = res
@@ -255,14 +250,14 @@ def simulate_net_profits(
         delta_matrix = np.zeros_like(new_spend_df.loc[input_mask, channels])
         delta_matrix[:, idx] += delta
         new_spend_df.loc[input_mask, channels] += delta_matrix
-        attr_obj = AttributorBeta(
+        attr_obj = AttributorGamma(
             model=model,
-            attr_regressors=channels,
+            # attr_regressors=channels,
             start=budget_start,
             end=budget_end,
             df=new_spend_df,
         )
-        res = attr_obj.make_attribution(true_up=False, fixed_intercept=True)
+        res = attr_obj.make_attribution()
         _, res_spend_attr_df, res_spend_df, _ = res
         # (n_channels, )
         res_spend_attr_arr = np.sum(res_spend_attr_df[channels].values, 0)

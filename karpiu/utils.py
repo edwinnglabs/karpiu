@@ -186,14 +186,14 @@ def merge_dfs(
     return reduce(lambda left, right: pd.merge(left, right, on=on, how=how), dfs)
 
 
-def make_info_logger(name: str, path: Optional[str] = None) -> logging.Logger:
+def make_logger(name: str, path: Optional[str] = None, level: Optional[int] = logging.INFO) -> logging.Logger:
     """generate new logger in a standardized way for Karpiu
 
     Returns:
         logging.Logger: _description_
     """
     logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -201,12 +201,12 @@ def make_info_logger(name: str, path: Optional[str] = None) -> logging.Logger:
 
     if path is None:
         ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
+        ch.setLevel(level)
         ch.setFormatter(formatter)
         logger.addHandler(ch)
     else:
         fh = logging.FileHandler(path, mode="w")
-        fh.setLevel(logging.INFO)
+        fh.setLevel(level)
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
@@ -216,7 +216,7 @@ def make_info_logger(name: str, path: Optional[str] = None) -> logging.Logger:
 def get_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name=name)
     if len(logger.handlers) == 0:
-        logger = make_info_logger(name)
+        logger = make_logger(name, level=logging.INFO)
     return logger
 
 

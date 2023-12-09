@@ -2,14 +2,20 @@ import math
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
-import matplotlib.pyplot as plt
+
 from typing import Optional, List, Union, Dict, Literal, Tuple
 from copy import deepcopy
-from ..explainability import AttributorBeta
+
 import logging
 import matplotlib
+import matplotlib.pyplot as plt
 
-logger = logging.getLogger("karpiu-planning")
+from ..explainability import AttributorGamma
+from ..utils import make_logger, get_logger
+
+logger = get_logger("karpiu-planning")
+logger_cc = get_logger("karpiu-planning-cc")
+logger_cc.setLevel(logging.WARNING)
 
 from ..models import MMM
 
@@ -20,13 +26,13 @@ class CostCurves:
         model: MMM,
         n_steps: int = 10,
         curve_type: Literal["overall", "individual"] = "overall",
-        channels: Optional[Union[List[str], str]] = None,
+        # channels: Optional[Union[List[str], str]] = None,
         spend_df: Optional[pd.DataFrame] = None,
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
         max_spend: Optional[Union[np.ndarray, float]] = None,
         multipliers: Optional[Union[np.ndarray, Dict[str, np.ndarray]]] = None,
-        min_spend: float = 1.0,
+        min_spend: float = 1e-3,
         extend_multiplier: float = 2.0,
     ):
         if spend_df is None:
@@ -37,19 +43,19 @@ class CostCurves:
         self.n_steps = n_steps
         self.model = deepcopy(model)
 
-        if curve_type == "overall":
-            self.channels = model.get_spend_cols()
-        elif curve_type == "individual":
-            all_channels = model.get_spend_cols()
-            # generate the intersection of input and available channels
-            if channels is not None:
-                # self.channels = list(set(all_channels).intersection(set(channels)))
-                self.channels = [x for x in all_channels if x in channels]
-            else:
-                self.channels = all_channels
-        else:
-            raise Exception("Invalid {} curve type input.".format(curve_type))
-
+        # if curve_type == "overall":
+        #     self.channels = model.get_spend_cols()
+        # elif curve_type == "individual":
+        #     all_channels = model.get_spend_cols()
+        # #     # generate the intersection of input and available channels
+        #     if channels is not None:
+        #         # self.channels = list(set(all_channels).intersection(set(channels)))
+        #         self.channels = [x for x in all_channels if x in channels]
+        #     else:
+        #         self.channels = all_channels
+        # else:
+        #     raise Exception("Invalid {} curve type input.".format(curve_type))
+        self.channels = model.get_spend_cols()
         self.curve_type = curve_type
         self.date_col = model.date_col
         self.n_max_adstock = model.get_max_adstock()
@@ -188,16 +194,19 @@ class CostCurves:
                 temp_df = self.spend_df.copy()
                 temp_df.loc[self.spend_mask, self.channels] = spend_matrix * m
 
-                attr_obj = AttributorBeta(
+
+                # TODO: shut down info logger; find a way to flexibly set logging level 
+                # or separate cost curve logger and attributor logger or both
+                attr_obj = AttributorGamma(
                     self.model,
                     df=temp_df,
-                    attr_regressors=self.channels,
+                    logger=logger_cc,
                     start=self.spend_start,
                     end=self.spend_end,
                 )
 
                 _, spend_attr_df, _, _ = attr_obj.make_attribution(
-                    true_up=False, fixed_intercept=True
+                    # true_up=False, fixed_intercept=True
                 )
                 total_spend = np.sum(spend_matrix * m)
                 total_outcome = np.sum(spend_attr_df.loc[:, self.channels].values)
@@ -217,17 +226,14 @@ class CostCurves:
                         )
                         total_spend = np.sum(temp_df.loc[self.spend_mask, ch].values)
 
-                        attr_obj = AttributorBeta(
+                        attr_obj = AttributorGamma(
                             self.model,
                             df=temp_df,
-                            attr_regressors=[ch],
+                            logger=logger_cc,
                             start=self.spend_start,
                             end=self.spend_end,
                         )
-                        _, spend_attr_df, _, _ = attr_obj.make_attribution(
-                            true_up=False, fixed_intercept=True
-                        )
-                        # pred = self.model.predict(df=temp_df)
+                        _, spend_attr_df, _, _ = attr_obj.make_attribution()
 
                         total_outcome = np.sum(spend_attr_df.loc[:, [ch]].values)
                         cost_curves_dict["ch"].append(ch)
@@ -243,17 +249,14 @@ class CostCurves:
                         )
                         total_spend = np.sum(temp_df.loc[self.spend_mask, ch].values)
 
-                        attr_obj = AttributorBeta(
+                        attr_obj = AttributorGamma(
                             self.model,
                             df=temp_df,
-                            attr_regressors=[ch],
+                            logger=logger_cc,
                             start=self.spend_start,
                             end=self.spend_end,
                         )
-                        _, spend_attr_df, _, _ = attr_obj.make_attribution(
-                            true_up=False, fixed_intercept=True
-                        )
-                        # pred = self.model.predict(df=temp_df)
+                        _, spend_attr_df, _, _ = attr_obj.make_attribution()
 
                         total_outcome = np.sum(spend_attr_df.loc[:, [ch]].values)
                         cost_curves_dict["ch"].append(ch)
@@ -451,7 +454,10 @@ class CostCurves:
                 )
 
             ax.set_xlim(left=0.0, right=x_max)
-
+            ax.grid(
+                linestyle="dotted", linewidth=0.7, color="grey", alpha=0.8
+            )
+            ax.xaxis.set_major_formatter("${x:1.0f}")
             if optim_cost_curves is not None:
                 temp_optim_cc = optim_cost_curves[
                     optim_cost_curves["ch"] == "overall"

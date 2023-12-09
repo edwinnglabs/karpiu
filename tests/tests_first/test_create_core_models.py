@@ -7,6 +7,7 @@ import os
 
 # this is a test to be run to create core models for tests such as attribution, optimization, ... etc.
 def test_create_core_models():
+    print("Create and test simple model.")
     # the simplest proof-of-concept case without adstock, events and seasonality.
     seed = 2022
     n_steps = 365 * 3
@@ -48,10 +49,19 @@ def test_create_core_models():
         os.makedirs("./tests/resources")
 
     print("Dumping simple-model.pkl...")
-    with open("./tests/resources/simple-model.pkl", "wb") as f:
+
+    model_file = "simple-model.pkl"
+    model_path = os.path.join(os.path.dirname(__file__), 
+                   '..',
+                   'resources/',
+                   model_file
+                )
+    model_path = os.path.abspath(model_path)
+    with open(model_path, "wb") as f:
         pickle.dump(mmm, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     # non-seasonal case with adstock; no events and seasonality
+    print("Create and non-seasonal adstock model.")
     seed = 2023
     np.random.seed(seed)
     adstock_args = {
@@ -89,10 +99,18 @@ def test_create_core_models():
     mmm.fit(df, num_warmup=1000, num_sample=1000, chains=4)
 
     print("Dumping non-seasonal-model.pkl...")
-    with open("./tests/resources/non-seasonal-model.pkl", "wb") as f:
+    model_file = "non-seasonal-model.pkl"
+    model_path = os.path.join(os.path.dirname(__file__), 
+                   '..',
+                   'resources/',
+                   model_file
+                )
+    model_path = os.path.abspath(model_path)
+    with open(model_path, "wb") as f:
         pickle.dump(mmm, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     # seasonal case with adstock, events, seasonality
+    print("Create and seasonal adstock model.")
     seed = 2024
     np.random.seed(seed)
     adstock_args = {
@@ -134,5 +152,12 @@ def test_create_core_models():
     mmm.fit(df, num_warmup=1000, num_sample=1000, chains=4)
 
     print("Dumping seasonal-model.pkl...")
-    with open("./tests/resources/seasonal-model.pkl", "wb") as f:
+    model_file = "seasonal-model.pkl"
+    model_path = os.path.join(os.path.dirname(__file__), 
+                   '..',
+                   'resources/',
+                   model_file
+                )
+    model_path = os.path.abspath(model_path)
+    with open(model_path, "wb") as f:
         pickle.dump(mmm, f, protocol=pickle.HIGHEST_PROTOCOL)

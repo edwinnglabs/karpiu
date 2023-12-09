@@ -5,12 +5,12 @@ import logging
 from typing import Optional, Tuple, List
 
 from ..utils import adstock_process
-from ..model_shell import MMMShell
+from ..model_shell import MMMShellLegacy
 from ..models import MMM
 from .functions import make_attribution_numpy_beta
 
 
-class AttributorBeta(MMMShell):
+class AttributorBeta(MMMShellLegacy):
     def __init__(
         self,
         model: MMM,
