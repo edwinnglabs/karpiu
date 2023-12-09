@@ -9,6 +9,7 @@ from karpiu.models import MMM
 from karpiu.model_shell import MMMShellLegacy
 import logging
 
+
 class ChannelBudgetOptimizer(MMMShellLegacy):
     """Base class for optimization solution"""
 
@@ -33,8 +34,8 @@ class ChannelBudgetOptimizer(MMMShellLegacy):
         self.full_channels = model.get_spend_cols()
         self.optim_channels_idx = list()
         for ch in optim_channels:
-            for idx in range(len(self.full_channels )):
-                if ch == self.full_channels [idx]:
+            for idx in range(len(self.full_channels)):
+                if ch == self.full_channels[idx]:
                     self.optim_channels_idx.append(idx)
 
         # this is more for calculating all attribution required math
@@ -241,6 +242,7 @@ class ChannelBudgetOptimizer(MMMShellLegacy):
             )
             self.set_constraints([total_budget_constraint])
 
+
 class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and
     lift-time values (LTV) per channel
@@ -278,7 +280,7 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
             target_calc_regressors_matrix=spend_matrix,
         )
 
-        attr_marketing  = self.attributor._derive_attr_marketing(
+        attr_marketing = self.attributor._derive_attr_marketing(
             target_transformed_matrix,
             target_coef_array,
         )
@@ -289,10 +291,10 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         )
 
         norm_delta_matrix, _ = self.attributor._derive_market_shares_delta_matrix(
-            pred_bau = pred_bau_array,
+            pred_bau=pred_bau_array,
             target_calc_regressors_matrix=spend_matrix,
             target_transformed_matrix=target_transformed_matrix,
-            target_coef_array=target_coef_array
+            target_coef_array=target_coef_array,
         )
 
         _, spend_attr_matrix = self.attributor._derive_attr_matrix(
@@ -328,4 +330,3 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         revs, costs = self.objective_func(xk, extra_info=True)
         self.callback_metrics["optim_revenues"].append(revs)
         self.callback_metrics["optim_costs"].append(costs)
-

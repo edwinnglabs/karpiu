@@ -51,11 +51,7 @@ def test_create_core_models():
     print("Dumping simple-model.pkl...")
 
     model_file = "simple-model.pkl"
-    model_path = os.path.join(os.path.dirname(__file__), 
-                   '..',
-                   'resources/',
-                   model_file
-                )
+    model_path = os.path.join(os.path.dirname(__file__), "..", "resources/", model_file)
     model_path = os.path.abspath(model_path)
     with open(model_path, "wb") as f:
         pickle.dump(mmm, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -100,11 +96,7 @@ def test_create_core_models():
 
     print("Dumping non-seasonal-model.pkl...")
     model_file = "non-seasonal-model.pkl"
-    model_path = os.path.join(os.path.dirname(__file__), 
-                   '..',
-                   'resources/',
-                   model_file
-                )
+    model_path = os.path.join(os.path.dirname(__file__), "..", "resources/", model_file)
     model_path = os.path.abspath(model_path)
     with open(model_path, "wb") as f:
         pickle.dump(mmm, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -153,11 +145,7 @@ def test_create_core_models():
 
     print("Dumping seasonal-model.pkl...")
     model_file = "seasonal-model.pkl"
-    model_path = os.path.join(os.path.dirname(__file__), 
-                   '..',
-                   'resources/',
-                   model_file
-                )
+    model_path = os.path.join(os.path.dirname(__file__), "..", "resources/", model_file)
     model_path = os.path.abspath(model_path)
     with open(model_path, "wb") as f:
         pickle.dump(mmm, f, protocol=pickle.HIGHEST_PROTOCOL)

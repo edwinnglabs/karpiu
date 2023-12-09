@@ -431,7 +431,7 @@ def make_attribution_numpy_gamma(
     max_adstock = adstock_matrix.shape[1] - 1
 
     # TODO: n_calc_steps mean n_attr_steps (result_steps?) + 2 * max_adstock
-    # delta matrix store the shares from each step, each lag effect and each channel 
+    # delta matrix store the shares from each step, each lag effect and each channel
     # (n_calc_steps, max_adstock + 1, n_attr_reg)
     delta_matrix = np.zeros((n_calc_steps, max_adstock + 1, n_attr_reg))
     # a same size of delta matrix to prepare paid date dimension

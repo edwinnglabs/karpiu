@@ -8,6 +8,7 @@ from copy import deepcopy
 from karpiu.models import MMM
 from karpiu.model_shell import MMMShellLegacy
 
+
 class BudgetOptimizer(MMMShellLegacy):
     """Base class for optimization solution"""
 
@@ -176,6 +177,3 @@ class BudgetOptimizer(MMMShellLegacy):
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
         self.callback_metrics["xs"].append(xk)
-
-
-

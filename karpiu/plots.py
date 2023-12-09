@@ -49,6 +49,7 @@ class ColorConstants:
         "#E4E5FB",
     ]
 
+
 def plot_attribution_waterfall(
     model: MMM,
     attr_df: pd.DataFrame,

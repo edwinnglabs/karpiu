@@ -268,26 +268,32 @@ class MMMShell:
         pred_raw_df = model.predict(raw_df, decompose=True)
         self.resid_df = raw_df[[self.date_col, self.kpi_col]].assign(resid=0)
         pos_flag = raw_df[self.kpi_col].values > 0
-        self.resid_df.loc[pos_flag, 'resid'] = (
-            np.log(raw_df[self.kpi_col].values[pos_flag]) 
-            - pred_raw_df['log_prediction'].values[pos_flag]
+        self.resid_df.loc[pos_flag, "resid"] = (
+            np.log(raw_df[self.kpi_col].values[pos_flag])
+            - pred_raw_df["log_prediction"].values[pos_flag]
         )
         self.resid_df = self.resid_df.set_index(self.date_col)
 
         pred_df = model.predict(self.df, decompose=True)
-        self.base_comp_array = np.exp(pred_df['log_prediction'].values - pred_df['paid'].values)
+        self.base_comp_array = np.exp(
+            pred_df["log_prediction"].values - pred_df["paid"].values
+        )
         # access residuals by time index
         resid_array = (
             self.resid_df.reindex(self.df[self.date_col])
-            .loc[self.df[self.date_col], 'resid']
+            .loc[self.df[self.date_col], "resid"]
             .values
         )
         # fill in zero residuals when it is out-of-sample
-        resid_array[np.isnan(resid_array)] = 0.
+        resid_array[np.isnan(resid_array)] = 0.0
         # organic attribution
-        self.attr_organic = np.exp(pred_df['log_prediction'].values - pred_df['paid'].values + resid_array)
+        self.attr_organic = np.exp(
+            pred_df["log_prediction"].values - pred_df["paid"].values + resid_array
+        )
         # initial condition with spend input for the paid attribution
-        self.attr_init_marketing= self.attr_organic  * (np.exp(pred_df['paid'].values) - 1)
+        self.attr_init_marketing = self.attr_organic * (
+            np.exp(pred_df["paid"].values) - 1
+        )
 
     def _define_masks(
         self,
@@ -307,5 +313,3 @@ class MMMShell:
         )
 
         return input_mask, result_mask, calc_mask
-
-

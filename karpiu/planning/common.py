@@ -16,7 +16,7 @@ def calculate_marginal_cost(
     spend_df: Optional[pd.DataFrame] = None,
     delta: float = 1e-5,
     # either additive or multiplicative
-    method: str = 'multiplicative',
+    method: str = "multiplicative",
 ) -> pd.DataFrame:
     """Generate overall marginal cost per channel with given period [spend_start, spend_end]
     Args:
@@ -30,7 +30,7 @@ def calculate_marginal_cost(
     Returns:
 
     """
-    if method not in ['additive', 'multiplicative']:
+    if method not in ["additive", "multiplicative"]:
         raise Exception('method must be in either "additive" or "multiplicative".')
 
     if spend_df is None:
@@ -73,7 +73,6 @@ def calculate_marginal_cost(
     # the varying comp is computed below
     marginal_cost = np.empty(len(channels))
     for idx, ch in enumerate(channels):
-
         # (calc_steps, n_regressors)
         delta_matrix = np.zeros_like(baseline_spend_matrix)
         if max_adstock > 0:
@@ -81,7 +80,7 @@ def calculate_marginal_cost(
         else:
             delta_matrix[:, idx] = delta
 
-        if method == 'additive':
+        if method == "additive":
             # (calc_steps, n_regressors)
             new_spend_matrix = baseline_spend_matrix + delta_matrix
         else:
@@ -94,10 +93,10 @@ def calculate_marginal_cost(
 
         new_pred_comp = base_comp * np.exp(new_reg_comp)
 
-        if method == 'additive':
+        if method == "additive":
             marginal_cost[idx] = np.sum(delta_matrix) / np.sum(
                 new_pred_comp - baseline_pred_comp
-            ) 
+            )
         else:
             marginal_cost[idx] = np.sum(delta_matrix * baseline_spend_matrix) / np.sum(
                 new_pred_comp - baseline_pred_comp
@@ -121,7 +120,7 @@ def generate_cost_report(
     spend_scaler: float = 1e3,
     delta: float = 1e-1,
     # either additive or multiplicative
-    method: str = 'additive',
+    method: str = "additive",
 ):
     """A wrapper function combining calculation of average and marginal cost in pre and post optimization"""
     # report average and marginal cost

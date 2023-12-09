@@ -92,8 +92,8 @@ def check_convergence(model: MMM):
 
 
 def two_steps_optim_check(
-    model: MMM, 
-    budget_start: str, 
+    model: MMM,
+    budget_start: str,
     n_iters: int = 10,
     adstock_off: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -103,17 +103,16 @@ def two_steps_optim_check(
     date_col = model.date_col
     budget_start = pd.to_datetime(budget_start)
     budget_end = budget_start + pd.DateOffset(days=1)
-    
+
     raw_df = model.get_raw_df()
     init_weight = np.mean(
         raw_df.loc[
-            (raw_df[date_col] >= budget_start) 
-            & (raw_df[date_col] <= budget_end),
-            channels
+            (raw_df[date_col] >= budget_start) & (raw_df[date_col] <= budget_end),
+            channels,
         ].values,
-        axis=0
+        axis=0,
     )
-    
+
     # arbitrary
     base_weight = np.ones((1, n_channels)) * init_weight
     # arbitrary
@@ -128,12 +127,12 @@ def two_steps_optim_check(
     init_max_adstock = model.get_max_adstock()
     if adstock_off and model.get_max_adstock() > 0:
         model.adstock_df = None
-    
+
     model.raw_df = model.raw_df.loc[init_max_adstock:, :].reset_index(drop=True)
     df = model.get_raw_df()
-    
+
     # turn-off info
-    logger = logging.getLogger('karpiu-planning-test')
+    logger = logging.getLogger("karpiu-planning-test")
     logger.setLevel(30)
 
     for idx, x in enumerate(tqdm(budget_ratios)):
@@ -143,9 +142,8 @@ def two_steps_optim_check(
         spend_df = df.copy()
         spend_df.loc[
             (spend_df[date_col] >= budget_start) & (spend_df[date_col] <= budget_end),
-            channels
+            channels,
         ] = budget_matrix
-
 
         attributor = AttributorGamma(
             model=model,
@@ -160,13 +158,13 @@ def two_steps_optim_check(
         pred_df = model.predict(spend_df, decompose=True)
         msh = MMMShell(model)
         # note that this is un-normalized comp; not equal to final marketing attribution
-        paid_arr = pred_df.loc[        
-            (pred_df[date_col] >= budget_start) & (pred_df[date_col] <= budget_end), 
-            'paid'
+        paid_arr = pred_df.loc[
+            (pred_df[date_col] >= budget_start) & (pred_df[date_col] <= budget_end),
+            "paid",
         ].values
-        organic_attr_arr = msh.attr_organic[ 
+        organic_attr_arr = msh.attr_organic[
             (pred_df[date_col] >= budget_start) & (pred_df[date_col] <= budget_end)
         ]
         total_response[idx] = np.sum(organic_attr_arr * np.exp(paid_arr))
-        
+
     return budget_ratios, revs, total_response

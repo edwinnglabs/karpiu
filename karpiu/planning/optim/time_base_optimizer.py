@@ -9,6 +9,7 @@ from karpiu.models import MMM
 from karpiu.model_shell import MMMShellLegacy
 from ...explainability.attribution_gamma import AttributorGamma
 
+
 class TimeBudgetOptimizer(MMMShellLegacy):
     """_summary_
 
@@ -65,7 +66,7 @@ class TimeBudgetOptimizer(MMMShellLegacy):
         # (n_budget_steps, n_optim_channels)
         self.init_spend_matrix = self.df.loc[
             self.budget_mask, self.optim_channels
-        ].values 
+        ].values
 
         # total spend per time step
         # (n_budget_steps, )
@@ -98,7 +99,9 @@ class TimeBudgetOptimizer(MMMShellLegacy):
             # equally split weight
             # self.weight = np.ones((1, len(optim_channels))) / len(optim_channels)
             # input volume weight based
-            self.weight = np.sum(self.init_spend_matrix, 0) / np.sum(self.init_spend_matrix)
+            self.weight = np.sum(self.init_spend_matrix, 0) / np.sum(
+                self.init_spend_matrix
+            )
         else:
             self.weight = weight
 
@@ -239,14 +242,19 @@ class TimeBudgetOptimizer(MMMShellLegacy):
             self.set_constraints([total_budget_constraint])
 
 
-
 class TimeNetProfitMaximizer(TimeBudgetOptimizer):
     """Perform revenue optimization with a given Marketing Mix Model and
     lift-time values (LTV) per channel; an extra variance penalty is introduced to resolve
     identifiability due to adstock
     """
 
-    def __init__(self, attributor: AttributorGamma, ltv_arr: np.ndarray, variance_penalty: float = 0., **kwargs):
+    def __init__(
+        self,
+        attributor: AttributorGamma,
+        ltv_arr: np.ndarray,
+        variance_penalty: float = 0.0,
+        **kwargs
+    ):
         super().__init__(**kwargs)
         # (n_optim_channels, )
         self.ltv_arr = ltv_arr
@@ -272,7 +280,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         target_transformed_matrix = self.attributor._derive_target_transformed_matrix(
             target_calc_regressors_matrix=spend_matrix,
         )
-        attr_marketing  = self.attributor._derive_attr_marketing(
+        attr_marketing = self.attributor._derive_attr_marketing(
             target_transformed_matrix,
             target_coef_array,
         )
@@ -283,10 +291,10 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         )
 
         norm_delta_matrix, _ = self.attributor._derive_market_shares_delta_matrix(
-            pred_bau = pred_bau_array,
+            pred_bau=pred_bau_array,
             target_calc_regressors_matrix=spend_matrix,
             target_transformed_matrix=target_transformed_matrix,
-            target_coef_array=target_coef_array
+            target_coef_array=target_coef_array,
         )
 
         _, spend_attr_matrix = self.attributor._derive_attr_matrix(

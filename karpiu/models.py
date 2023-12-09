@@ -605,14 +605,15 @@ class MMM:
         df = df.copy()
         transform_df = self._preprocess_df(df, transform_response=False)
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
-        
+
         if decompose:
-            pred['log_prediction']  = pred["prediction"]
+            pred["log_prediction"] = pred["prediction"]
 
         # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [
             x
-            for x in ["prediction_5", "prediction", "prediction_95"] if x in pred.columns
+            for x in ["prediction_5", "prediction", "prediction_95"]
+            if x in pred.columns
         ]
         pred[pred_tr_col] = pred[pred_tr_col].apply(np.exp)
 
@@ -678,7 +679,7 @@ class MMM:
                     ]
                 )
                 pred["control_features"] = reg_control
-            
+
         return pred
 
     def get_regressors(self, exclude_fs_cols: bool = True) -> List[str]:

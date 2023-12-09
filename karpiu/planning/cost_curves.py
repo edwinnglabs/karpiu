@@ -19,6 +19,7 @@ logger_cc.setLevel(logging.WARNING)
 
 from ..models import MMM
 
+
 # TODO: need unit test on cost curves class
 class CostCurves:
     def __init__(
@@ -194,8 +195,7 @@ class CostCurves:
                 temp_df = self.spend_df.copy()
                 temp_df.loc[self.spend_mask, self.channels] = spend_matrix * m
 
-
-                # TODO: shut down info logger; find a way to flexibly set logging level 
+                # TODO: shut down info logger; find a way to flexibly set logging level
                 # or separate cost curve logger and attributor logger or both
                 attr_obj = AttributorGamma(
                     self.model,
@@ -327,7 +327,7 @@ class CostCurves:
 
         if self.curve_type == "individual":
             if figsize is None:
-                figsize=(18, nrows * 4.5)
+                figsize = (18, nrows * 4.5)
             # multiple cost curves
             fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=figsize)
             axes = axes.flatten()
@@ -336,7 +336,6 @@ class CostCurves:
                 axes[idx].set_frame_on(frame_on)
                 if idx >= len(self.channels):
                     continue
-
 
                 ch = self.channels[idx]
                 temp_cc = cost_curves[cost_curves["ch"] == ch].reset_index(drop=True)
@@ -419,7 +418,7 @@ class CostCurves:
         elif self.curve_type == "overall":
             # single cost curve
             if figsize is None:
-                figsize=(18, 12)
+                figsize = (18, 12)
             fig, ax = plt.subplots(1, 1, figsize=figsize)
             ax.set_frame_on(frame_on)
             temp_cc = cost_curves[cost_curves["ch"] == "overall"].reset_index(drop=True)
@@ -454,9 +453,7 @@ class CostCurves:
                 )
 
             ax.set_xlim(left=0.0, right=x_max)
-            ax.grid(
-                linestyle="dotted", linewidth=0.7, color="grey", alpha=0.8
-            )
+            ax.grid(linestyle="dotted", linewidth=0.7, color="grey", alpha=0.8)
             ax.xaxis.set_major_formatter("${x:1.0f}")
             if optim_cost_curves is not None:
                 temp_optim_cc = optim_cost_curves[

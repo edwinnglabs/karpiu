@@ -22,13 +22,7 @@ class AttributorGamma(MMMShell):
         debug: bool = False,
         **kwargs
     ):
-        super().__init__(
-            model=model,
-            start=start,
-            end=end,
-            df=df,
-            **kwargs
-        )
+        super().__init__(model=model, start=start, end=end, df=df, **kwargs)
 
         self.attr_start = self.start
         self.attr_end = self.end
@@ -136,7 +130,7 @@ class AttributorGamma(MMMShell):
     def _derive_target_transformed_matrix(
         self,
         # (n_calc_steps, n_regressors)
-        target_calc_regressors_matrix: np.ndarray,   
+        target_calc_regressors_matrix: np.ndarray,
     ) -> np.ndarray:
         if self.max_adstock > 0:
             target_transformed_matrix = adstock_process(
@@ -170,14 +164,12 @@ class AttributorGamma(MMMShell):
         attr_marketing = (
             np.exp(
                 np.sum(
-                    target_coef_array *
-                    np.log(1 + 
-                        target_transformed_matrix / 
-                        self.target_sat_array
-                    )
-                    , -1
+                    target_coef_array
+                    * np.log(1 + target_transformed_matrix / self.target_sat_array),
+                    -1,
                 )
-            ) - 1
+            )
+            - 1
         ) * self.attr_organic[self.calc_mask]
 
         return attr_marketing
@@ -187,23 +179,23 @@ class AttributorGamma(MMMShell):
         # (n_calc_steps, )
         transformed_regressors_matrix: np.ndarray,
         # (n_regressors, )
-        target_coef_array: np.ndarray,    
+        target_coef_array: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Derive a time-based array to be used in attribution
         Returns:
-            np.ndarray: the array in shape (n_calc_steps, ) where it is equal to 
+            np.ndarray: the array in shape (n_calc_steps, ) where it is equal to
             np.exp(trend + seas + control + marketing)
         """
-        return np.exp(
-            np.sum(
-                target_coef_array *
-                np.log(1 + 
-                    transformed_regressors_matrix / 
-                    self.target_sat_array
+        return (
+            np.exp(
+                np.sum(
+                    target_coef_array
+                    * np.log(1 + transformed_regressors_matrix / self.target_sat_array),
+                    -1,
                 )
-                , -1
             )
-        ) * self.base_comp_array[self.calc_mask]
+            * self.base_comp_array[self.calc_mask]
+        )
 
     def _derive_market_shares_delta_matrix(
         self,
@@ -214,7 +206,7 @@ class AttributorGamma(MMMShell):
         # (n_calc_steps, n_regressors) but first max-adstock matrix is padded with zeros
         target_transformed_matrix: np.ndarray,
         # (n_regressors, )
-        target_coef_array: np.ndarray,    
+        target_coef_array: np.ndarray,
     ) -> np.ndarray:
         """Derive a normalized-market shares of contribution of marketing on each period and time lag
 
@@ -263,8 +255,10 @@ class AttributorGamma(MMMShell):
                 )
             else:
                 # (n_calc_steps, 1)
-                temp_bau_transformed_regressor = deepcopy(target_transformed_matrix[:, [idx]])
-                
+                temp_bau_transformed_regressor = deepcopy(
+                    target_transformed_matrix[:, [idx]]
+                )
+
             # (n_calc_steps, max_adstock + 1)
             denominator = (
                 1 + temp_bau_transformed_regressor / self.target_sat_array[idx]
@@ -302,12 +296,12 @@ class AttributorGamma(MMMShell):
                     ],
                     0,
                 )
-            
+
                 # (n_calc_steps, max_adstock + 1)
                 numerator = (
                     1 + temp_full_regressor_zero_reduced / self.target_sat_array[idx]
                 ) ** self.target_coef_array[idx]
-            
+
             else:
                 # in no-adstock case, the "reduced spend" to be the zero spend which
                 # leads the numerator to be 1
@@ -331,14 +325,14 @@ class AttributorGamma(MMMShell):
         # force invalid number to be zero
         # force small number to be zero
         delta_fix_flag = np.logical_and(
-            np.logical_not(np.isfinite(delta_matrix)),
-            delta_matrix <= 1e-7
+            np.logical_not(np.isfinite(delta_matrix)), delta_matrix <= 1e-7
         )
         if self.debug:
-            self.logger.info("Total delta fixed flag: {} out of {}".format(
-                np.sum(delta_fix_flag),
-                len(delta_fix_flag.flatten())
-            ))
+            self.logger.info(
+                "Total delta fixed flag: {} out of {}".format(
+                    np.sum(delta_fix_flag), len(delta_fix_flag.flatten())
+                )
+            )
 
         # (n_steps, 1, 1)
         total_delta = np.sum(delta_matrix, axis=(-1, -2), keepdims=True)
@@ -365,24 +359,27 @@ class AttributorGamma(MMMShell):
         activities_attr_matrix = np.sum(full_attr_matrix, axis=-2)
         # remove the first and last max_adstock periods as they are not fully observed
         if self.max_adstock > 0:
-            activities_attr_matrix = activities_attr_matrix[self.max_adstock:-self.max_adstock]
+            activities_attr_matrix = activities_attr_matrix[
+                self.max_adstock : -self.max_adstock
+            ]
 
         # spend_attr:
         if self.max_adstock > 0:
             spend_attr_matrix = np.zeros(norm_delta_matrix.shape)
             for idx in range(full_attr_matrix.shape[2]):
                 spend_attr_matrix[:, :, idx] = np_shift(
-                    full_attr_matrix[:, :, idx], np.arange(0, -1 * (self.max_adstock + 1), -1)
+                    full_attr_matrix[:, :, idx],
+                    np.arange(0, -1 * (self.max_adstock + 1), -1),
                 )
             spend_attr_matrix = np.sum(spend_attr_matrix, axis=-2)
-            spend_attr_matrix = spend_attr_matrix[self.max_adstock:-self.max_adstock]
+            spend_attr_matrix = spend_attr_matrix[self.max_adstock : -self.max_adstock]
         else:
             # TODO: can verify if both of them are equal later
             spend_attr_matrix = deepcopy(activities_attr_matrix)
 
         # prevent overflow
-        activities_attr_matrix[activities_attr_matrix <= 1e-7] = 0.
-        spend_attr_matrix[spend_attr_matrix <= 1e-7] = 0.
+        activities_attr_matrix[activities_attr_matrix <= 1e-7] = 0.0
+        spend_attr_matrix[spend_attr_matrix <= 1e-7] = 0.0
         return activities_attr_matrix, spend_attr_matrix
 
     def make_attribution(
@@ -390,7 +387,6 @@ class AttributorGamma(MMMShell):
         new_coef_name: Optional[str] = None,
         new_coef: Optional[float] = None,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        
         # update coefficients if new values are specified
         # (n_attr_regressors, )
         target_coef_array = self.target_coef_array
@@ -408,7 +404,7 @@ class AttributorGamma(MMMShell):
         target_transformed_matrix = self._derive_target_transformed_matrix(
             self.target_calc_regressors_matrix
         )
-        attr_marketing  = self._derive_attr_marketing(
+        attr_marketing = self._derive_attr_marketing(
             target_transformed_matrix,
             target_coef_array,
         )
@@ -419,10 +415,10 @@ class AttributorGamma(MMMShell):
         )
 
         norm_delta_matrix, delta_matrix = self._derive_market_shares_delta_matrix(
-            pred_bau = pred_bau_array,
+            pred_bau=pred_bau_array,
             target_calc_regressors_matrix=self.target_calc_regressors_matrix,
             target_transformed_matrix=target_transformed_matrix,
-            target_coef_array=target_coef_array
+            target_coef_array=target_coef_array,
         )
 
         activities_attr_matrix, spend_attr_matrix = self._derive_attr_matrix(
@@ -462,7 +458,9 @@ class AttributorGamma(MMMShell):
         spend_attr_df["organic"] = self.attr_organic[self.input_mask]
         spend_attr_df[self.target_regressors] = spend_attr_matrix
 
-        spend_df = self.df.loc[self.input_mask, [self.date_col] + self.target_regressors]
+        spend_df = self.df.loc[
+            self.input_mask, [self.date_col] + self.target_regressors
+        ]
         spend_df = spend_df.reset_index(drop=True)
 
         cost_df = spend_df[[self.date_col]].copy()

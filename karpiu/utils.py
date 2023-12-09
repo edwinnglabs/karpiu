@@ -186,7 +186,9 @@ def merge_dfs(
     return reduce(lambda left, right: pd.merge(left, right, on=on, how=how), dfs)
 
 
-def make_logger(name: str, path: Optional[str] = None, level: Optional[int] = logging.INFO) -> logging.Logger:
+def make_logger(
+    name: str, path: Optional[str] = None, level: Optional[int] = logging.INFO
+) -> logging.Logger:
     """generate new logger in a standardized way for Karpiu
 
     Returns:
