@@ -133,6 +133,7 @@ class BudgetOptimizer(MMMShellLegacy):
         maxiter: int = 2,
         eps: Optional[float] = None,
         ftol: float = 1e-7,
+        disp: bool = True,
     ) -> None:
         if init is None:
             x0 = self.init_spend_matrix.flatten() / self.spend_scaler
@@ -143,7 +144,7 @@ class BudgetOptimizer(MMMShellLegacy):
         self._init_callback_metrics()
 
         options = {
-            "disp": True,
+            "disp": disp,
             "maxiter": maxiter,
             "ftol": ftol,
         }

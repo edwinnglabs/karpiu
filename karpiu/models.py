@@ -815,3 +815,16 @@ class MMM:
     def get_logger(self):
         # not a deepcopy
         return self.logger
+
+    def copy(self, suppress_adstock: bool):
+        if suppress_adstock:
+            self.logger.info("Return a clone without adstock impact.")
+            clone_wo_adstock = deepcopy(self)
+            max_adstock = self.get_max_adstock()
+            raw_df = self.get_raw_df()
+            raw_df = raw_df[max_adstock:].reset_index(drop=True)
+            clone_wo_adstock.adstock_df = None
+            clone_wo_adstock.raw_df = raw_df
+            return clone_wo_adstock
+        else:
+            return deepcopy(self)

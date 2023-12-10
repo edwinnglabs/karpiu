@@ -167,6 +167,7 @@ class TimeBudgetOptimizer(MMMShellLegacy):
         maxiter: int = 2,
         eps: float = 1e-3,
         ftol: float = 1e-7,
+        disp: bool = True,
     ) -> None:
         if init is None:
             x0 = self.init_spend_array / self.spend_scaler
@@ -180,7 +181,7 @@ class TimeBudgetOptimizer(MMMShellLegacy):
             bounds=self.budget_bounds,
             constraints=self.constraints,
             options={
-                "disp": True,
+                "disp": disp,
                 "maxiter": maxiter,
                 "eps": eps,
                 "ftol": ftol,

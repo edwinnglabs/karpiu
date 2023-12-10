@@ -21,6 +21,10 @@ class AttributorBeta(MMMShellLegacy):
         logger: Optional[logging.Logger] = None,
         **kwargs
     ):
+        logger.warning(
+            "This is the Alpha version of attribution class. Be aware this may be deprecated in future version."
+            "For future support, please use the AttributorBeta instead."
+        )
         super().__init__(
             model=model,
             target_regressors=attr_regressors,

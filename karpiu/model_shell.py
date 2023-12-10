@@ -182,7 +182,8 @@ class MMMShell:
         # enforce we always need to attribute all channels here
         # to avoid inconsistency of different scenario
 
-        # raw_df is always loaded to calculate residuals
+        # raw_df is always loaded to calculate residuals to prevent user supply a dataframe 
+        # with incomplete time range
         raw_df = model.get_raw_df()
         if df is None:
             self.df = raw_df.copy()
