@@ -260,11 +260,11 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
     def objective_func(self, spend: np.ndarray, extra_info: bool = False):
         # spend(n_optim_channels, ) -> (broadcast) -> input spend matrix (n_budget_steps, n_optim_channels)
         # time weight(n_budget_steps, ) -> (expand_dim) -> time weight(n_budget_steps, 1)
-        # input spend matrix (n_budget_steps, n_optim_channels) * time weight(n_budget_steps, 1) 
+        # input spend matrix (n_budget_steps, n_optim_channels) * time weight(n_budget_steps, 1)
         # -> (multiply) -> distributed spend matrix
         input_channel_spend_matrix = (
             spend
-            * np.ones((self.n_budget_steps, self.n_optim_channels))
+            # * np.ones((self.n_budget_steps, self.n_optim_channels))
             * np.expand_dims(self.weight, -1)
         )
         # the full spend matrix pass into attribution calculation
@@ -306,7 +306,7 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
             attr_marketing=attr_marketing,
         )
 
-        # For attribution, revenue, and cost are calculated 
+        # For attribution, revenue, and cost are calculated
         # with all channels spend (not just the two we are optimizing) as the shape
         # (n_optim_channels, )
         revenue = self.ltv_arr * np.sum(spend_attr_matrix, 0)
@@ -315,7 +315,7 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         net_profit = np.sum(revenue - cost)
         loss = -1 * net_profit / self.response_scaler
         if extra_info:
-            return np.sum(revenue), np.sum(cost)
+            return np.sum(revenue), np.sum(cost), input_channel_spend_matrix
         else:
             return loss
 
@@ -324,6 +324,7 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
             "xs": list(),
             "optim_revenues": list(),
             "optim_costs": list(),
+            "spend_matrix": list(),
         }
 
     # override parent class
@@ -332,32 +333,36 @@ class ChannelNetProfitMaximizer(ChannelBudgetOptimizer):
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
         self.callback_metrics["xs"].append(xk)
-        revs, costs = self.objective_func(xk, extra_info=True)
+        revs, costs, spend_matrix = self.objective_func(xk, extra_info=True)
         self.callback_metrics["optim_revenues"].append(revs)
         self.callback_metrics["optim_costs"].append(costs)
+        self.callback_metrics["spend_matrix"].append(spend_matrix)
 
-def ch_based_net_profit_response_curve(ch_npm: ChannelNetProfitMaximizer, model:MMM, n_iters=10):
+
+def ch_based_net_profit_response_curve(
+    ch_npm: ChannelNetProfitMaximizer, model: MMM, n_iters=10
+):
     net_profits = np.empty((n_iters, n_iters))
     total_budget = ch_npm.total_budget
     date_col = ch_npm.date_col
     budget_start = ch_npm.budget_start
     budget_end = ch_npm.budget_end
 
-    logger = logging.getLogger('karpiu-planning-test')
+    logger = logging.getLogger("karpiu-planning-test")
     logger.setLevel(30)
 
-    def ch_based_net_profit_response(x1, x2, attributor, time_steps_weight, 
-        base_spend_df, optim_channels, ltv_arr
+    def ch_based_net_profit_response(
+        x1, x2, attributor, time_steps_weight, base_spend_df, optim_channels, ltv_arr
     ) -> np.ndarray:
         # (n_steps, n_channels)
-        input_spend_matrix = np.stack([x1, x2]) * time_steps_weight    
+        input_spend_matrix = np.stack([x1, x2]) * time_steps_weight
         temp_spend_df = base_spend_df.copy()
         temp_spend_df.loc[
-            (temp_spend_df[date_col] >= budget_start) 
+            (temp_spend_df[date_col] >= budget_start)
             & (temp_spend_df[date_col] <= budget_end),
-            optim_channels
+            optim_channels,
         ] = input_spend_matrix
-        
+
         attributor = AttributorGamma(
             model=model,
             df=temp_spend_df,
@@ -366,14 +371,16 @@ def ch_based_net_profit_response_curve(ch_npm: ChannelNetProfitMaximizer, model:
             logger=logger,
         )
         _, spend_attr, _, _ = attributor.make_attribution()
-        
+
         # For attribution, revenue, and cost are calculated with all channels spend (not just the two we are optimizing) as the input
-        cost = np.sum(temp_spend_df.loc[
-            (temp_spend_df[date_col] >= budget_start) 
-            & (temp_spend_df[date_col] <= budget_end),
-            # always use full channels in time-based optimization
-            model.get_spend_cols()
-        ].values)
+        cost = np.sum(
+            temp_spend_df.loc[
+                (temp_spend_df[date_col] >= budget_start)
+                & (temp_spend_df[date_col] <= budget_end),
+                # always use full channels in time-based optimization
+                model.get_spend_cols(),
+            ].values
+        )
 
         return np.sum(spend_attr.loc[:, model.get_spend_cols()].values * ltv_arr) - cost
 
@@ -387,10 +394,12 @@ def ch_based_net_profit_response_curve(ch_npm: ChannelNetProfitMaximizer, model:
             x1 = x1s[i, j]
             x2 = x2s[i, j]
             net_profits[i, j] = ch_based_net_profit_response(
-                x1, x2, attributor=ch_npm.attributor,
-                time_steps_weight=ch_npm.weight, 
+                x1,
+                x2,
+                attributor=ch_npm.attributor,
+                time_steps_weight=ch_npm.weight,
                 base_spend_df=ch_npm.df,
-                optim_channels=ch_npm.optim_channels, 
+                optim_channels=ch_npm.optim_channels,
                 ltv_arr=ch_npm.ltv_arr,
             )
 

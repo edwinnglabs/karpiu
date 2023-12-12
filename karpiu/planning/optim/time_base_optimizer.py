@@ -221,7 +221,7 @@ class TimeBudgetOptimizer(MMMShellLegacy):
         """_summary_
 
         Args:
-            df (pd.DataFrame): df assumes each index sequentially represents the time step in optimization period; 
+            df (pd.DataFrame): df assumes each index sequentially represents the time step in optimization period;
             a special index can be specified once as "total" which will be used as budget constraints instead of bounds
         """
         # "date" is a reserved keyword
@@ -278,10 +278,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         # spend(n_budget_steps, ) -> (expand) -> spend(n_budget_steps, 1)
         # (multiply channels weight(n_optim_channels)
         # -> (broadcast) -> input_channel_spend_matrix (n_budget_steps, n_optim_channels)
-        input_channel_spend_matrix = (
-            np.expand_dims(spend, -1)
-            * self.weight
-        )
+        input_channel_spend_matrix = np.expand_dims(spend, -1) * self.weight
         # the full spend matrix pass into attribution calculation
         spend_matrix = self.full_channels_spend_matrix.copy()
         spend_matrix[:, self.optim_channels_idx] = input_channel_spend_matrix
@@ -320,7 +317,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
             attr_marketing=attr_marketing,
         )
 
-        # For attribution, revenue, and cost are calculated 
+        # For attribution, revenue, and cost are calculated
         # with all channels spend (not just the two we are optimizing) as the shape
         # (n_optim_channels, )
         revenue = self.ltv_arr * np.sum(spend_attr_matrix, 0)
@@ -331,7 +328,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         # add punishment of variance of spend; otherwise may risk of identifiability issue with adstock
         loss += self.variance_penalty * np.var(spend)
         if extra_info:
-            return np.sum(revenue), np.sum(cost)
+            return np.sum(revenue), np.sum(cost), input_channel_spend_matrix
         else:
             return loss
 
@@ -340,6 +337,7 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
             "xs": list(),
             "optim_revenues": list(),
             "optim_costs": list(),
+            "spend_matrix": list(),
         }
 
     # override parent class
@@ -348,34 +346,37 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html for details.
         """
         self.callback_metrics["xs"].append(xk)
-        revs, costs = self.objective_func(xk, extra_info=True)
+        revs, costs, spend_matrix = self.objective_func(xk, extra_info=True)
         self.callback_metrics["optim_revenues"].append(revs)
         self.callback_metrics["optim_costs"].append(costs)
+        self.callback_metrics["spend_matrix"].append(spend_matrix)
 
 
 # assert budget start and and end are only two steps
-def time_based_net_profit_response_curve(t_npm: TimeNetProfitMaximizer, model:MMM, n_iters=10):
+def time_based_net_profit_response_curve(
+    t_npm: TimeNetProfitMaximizer, model: MMM, n_iters=10
+):
     net_profits = np.empty((n_iters, n_iters))
     total_budget = t_npm.total_budget
     date_col = t_npm.date_col
     budget_start = t_npm.budget_start
     budget_end = t_npm.budget_end
 
-    logger = logging.getLogger('karpiu-planning-test')
+    logger = logging.getLogger("karpiu-planning-test")
     logger.setLevel(30)
 
-    def time_based_net_profit_response(x1, x2, attributor, channels_weight, 
-        base_spend_df, optim_channels, ltv_arr
+    def time_based_net_profit_response(
+        x1, x2, attributor, channels_weight, base_spend_df, optim_channels, ltv_arr
     ) -> np.ndarray:
         # (n_steps, n_channels)
-        input_spend_matrix = np.vstack([x1, x2]) * channels_weight    
+        input_spend_matrix = np.vstack([x1, x2]) * channels_weight
         temp_spend_df = base_spend_df.copy()
         temp_spend_df.loc[
-            (temp_spend_df[date_col] >= budget_start) 
+            (temp_spend_df[date_col] >= budget_start)
             & (temp_spend_df[date_col] <= budget_end),
-            optim_channels
+            optim_channels,
         ] = input_spend_matrix
-        
+
         attributor = AttributorGamma(
             model=model,
             df=temp_spend_df,
@@ -384,15 +385,17 @@ def time_based_net_profit_response_curve(t_npm: TimeNetProfitMaximizer, model:MM
             logger=logger,
         )
         _, spend_attr, _, _ = attributor.make_attribution()
-        
+
         # For attribution, revenue, and cost are calculated with all channels spend (not just the two we are optimizing) as the input
-        cost = np.sum(temp_spend_df.loc[
-            (temp_spend_df[date_col] >= budget_start) 
-            & (temp_spend_df[date_col] <= budget_end),
-            # always use full channels in time-based optimization
-            model.get_spend_cols()
-        ].values)
-        
+        cost = np.sum(
+            temp_spend_df.loc[
+                (temp_spend_df[date_col] >= budget_start)
+                & (temp_spend_df[date_col] <= budget_end),
+                # always use full channels in time-based optimization
+                model.get_spend_cols(),
+            ].values
+        )
+
         return np.sum(spend_attr.loc[:, model.get_spend_cols()].values * ltv_arr) - cost
 
     x1s = total_budget * np.linspace(0, 1, n_iters)
@@ -405,14 +408,13 @@ def time_based_net_profit_response_curve(t_npm: TimeNetProfitMaximizer, model:MM
             x1 = x1s[i, j]
             x2 = x2s[i, j]
             net_profits[i, j] = time_based_net_profit_response(
-                x1, x2, attributor=t_npm.attributor,
-                channels_weight=t_npm.weight, 
+                x1,
+                x2,
+                attributor=t_npm.attributor,
+                channels_weight=t_npm.weight,
                 base_spend_df=t_npm.df,
-                optim_channels=t_npm.optim_channels, 
+                optim_channels=t_npm.optim_channels,
                 ltv_arr=t_npm.ltv_arr,
             )
 
     return x1s, x2s, net_profits
-
-
-
