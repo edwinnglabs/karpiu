@@ -3,8 +3,6 @@ import numpy as np
 import pickle
 from copy import deepcopy
 
-from karpiu.models import MMM
-from karpiu.simulation import make_mmm_daily_data
 from karpiu.planning.optim import TargetMaximizer
 from karpiu.planning.common import generate_cost_report
 from karpiu.utils import adstock_process
@@ -97,7 +95,6 @@ def test_target_maximizer():
 
     cost_report = generate_cost_report(
         model=mmm,
-        channels=optim_channels,
         start=budget_start,
         end=budget_end,
         pre_spend_df=df,

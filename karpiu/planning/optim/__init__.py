@@ -1,2 +1,3 @@
 from .target_maximizer import TargetMaximizer
-from .netprofit_maximizer import ChannelNetProfitMaximizer, TimeNetProfitMaximizer
+from .channel_optimizer import ChannelNetProfitMaximizer
+from .time_base_optimizer import TimeNetProfitMaximizer

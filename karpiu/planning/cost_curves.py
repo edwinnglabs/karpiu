@@ -2,30 +2,38 @@ import math
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
-import matplotlib.pyplot as plt
-from typing import Optional, List, Union, Dict, Literal
-from copy import deepcopy
-from ..explainability import AttributorBeta
-import logging
 
-logger = logging.getLogger("karpiu-planning")
+from typing import Optional, List, Union, Dict, Literal, Tuple
+from copy import deepcopy
+
+import logging
+import matplotlib
+import matplotlib.pyplot as plt
+
+from ..explainability import AttributorGamma
+from ..utils import make_logger, get_logger
+
+logger = get_logger("karpiu-planning")
+logger_cc = get_logger("karpiu-planning-cc")
+logger_cc.setLevel(logging.WARNING)
 
 from ..models import MMM
 
 
+# TODO: need unit test on cost curves class
 class CostCurves:
     def __init__(
         self,
         model: MMM,
         n_steps: int = 10,
         curve_type: Literal["overall", "individual"] = "overall",
-        channels: Optional[Union[List[str], str]] = None,
+        # channels: Optional[Union[List[str], str]] = None,
         spend_df: Optional[pd.DataFrame] = None,
         spend_start: Optional[str] = None,
         spend_end: Optional[str] = None,
         max_spend: Optional[Union[np.ndarray, float]] = None,
         multipliers: Optional[Union[np.ndarray, Dict[str, np.ndarray]]] = None,
-        min_spend: float = 1.0,
+        min_spend: float = 1e-3,
         extend_multiplier: float = 2.0,
     ):
         if spend_df is None:
@@ -36,19 +44,19 @@ class CostCurves:
         self.n_steps = n_steps
         self.model = deepcopy(model)
 
-        if curve_type == "overall":
-            self.channels = model.get_spend_cols()
-        elif curve_type == "individual":
-            all_channels = model.get_spend_cols()
-            # generate the intersection of input and available channels
-            if channels is not None:
-                # self.channels = list(set(all_channels).intersection(set(channels)))
-                self.channels = [x for x in all_channels if x in channels]
-            else:
-                self.channels = all_channels
-        else:
-            raise Exception("Invalid {} curve type input.".format(curve_type))
-
+        # if curve_type == "overall":
+        #     self.channels = model.get_spend_cols()
+        # elif curve_type == "individual":
+        #     all_channels = model.get_spend_cols()
+        # #     # generate the intersection of input and available channels
+        #     if channels is not None:
+        #         # self.channels = list(set(all_channels).intersection(set(channels)))
+        #         self.channels = [x for x in all_channels if x in channels]
+        #     else:
+        #         self.channels = all_channels
+        # else:
+        #     raise Exception("Invalid {} curve type input.".format(curve_type))
+        self.channels = model.get_spend_cols()
         self.curve_type = curve_type
         self.date_col = model.date_col
         self.n_max_adstock = model.get_max_adstock()
@@ -96,13 +104,13 @@ class CostCurves:
         else:
             if curve_type == "overall":
                 self.multipliers = self.derive_multipliers(
-                    extend_multiplier=extend_multiplier
+                    max_multiplier=extend_multiplier
                 )
             elif curve_type == "individual":
                 # since all the small channels can compare with the largest spend channel
                 # we don't need to extend by default
                 self.multipliers = self.derive_multipliers(
-                    extend_multiplier=extend_multiplier
+                    max_multiplier=extend_multiplier
                 )
         # will be generated under generate_cost_curves
         self.cost_curves = None
@@ -119,23 +127,23 @@ class CostCurves:
 
     def derive_multipliers(
         self,
-        extend_multiplier=1.0,
-    ):
-        # compute flat multiplier if it is an overall cost curves
-        # otherwise, compute cost curves based on max spend across all channels
-        # with the max multiplier
+        max_multiplier=1.0,
+    ) -> Union[Dict[str, np.ndarray], np.ndarray]:
+        # 1. if "overall" cost curve is specified,
+        # compute a list of multipliers with linear space (0, max_multiplier);
+        # insert "1." to guarantee current spend captured
+        # 2. if "individual" cost curves are specified,
+        # back solve multipliers arrays based on max spend * max_multiplier;
+        # so that each channel simulation ends at max channel spend * max_multiplier
+        # insert "1." to guarantee current spend captured; cost curves are stored as Dict
         if self.curve_type == "overall":
-            multipliers = np.sort(
-                np.unique(
-                    np.concatenate(
-                        [np.ones(1), np.linspace(0.0, extend_multiplier, self.n_steps)]
-                    )
-                )
+            seq = np.concatenate(
+                [np.ones(1), np.linspace(0.0, max_multiplier**0.5, self.n_steps)]
             )
+            multipliers = np.square(np.sort(np.unique(seq)))
         elif self.curve_type == "individual":
-            multipliers_arr = self.max_spend * extend_multiplier / self.total_spend_arr
+            multipliers_arr = self.max_spend * max_multiplier / self.total_spend_arr
             multipliers = {
-                # always make sure we have an additional "1" for current spend
                 k: np.sort(
                     np.unique(
                         np.concatenate([np.ones(1), np.linspace(0.0, m, self.n_steps)])
@@ -187,16 +195,18 @@ class CostCurves:
                 temp_df = self.spend_df.copy()
                 temp_df.loc[self.spend_mask, self.channels] = spend_matrix * m
 
-                attr_obj = AttributorBeta(
+                # TODO: shut down info logger; find a way to flexibly set logging level
+                # or separate cost curve logger and attributor logger or both
+                attr_obj = AttributorGamma(
                     self.model,
                     df=temp_df,
-                    attr_regressors=self.channels,
+                    logger=logger_cc,
                     start=self.spend_start,
                     end=self.spend_end,
                 )
 
                 _, spend_attr_df, _, _ = attr_obj.make_attribution(
-                    true_up=False, fixed_intercept=True
+                    # true_up=False, fixed_intercept=True
                 )
                 total_spend = np.sum(spend_matrix * m)
                 total_outcome = np.sum(spend_attr_df.loc[:, self.channels].values)
@@ -216,17 +226,14 @@ class CostCurves:
                         )
                         total_spend = np.sum(temp_df.loc[self.spend_mask, ch].values)
 
-                        attr_obj = AttributorBeta(
+                        attr_obj = AttributorGamma(
                             self.model,
                             df=temp_df,
-                            attr_regressors=[ch],
+                            logger=logger_cc,
                             start=self.spend_start,
                             end=self.spend_end,
                         )
-                        _, spend_attr_df, _, _ = attr_obj.make_attribution(
-                            true_up=False, fixed_intercept=True
-                        )
-                        # pred = self.model.predict(df=temp_df)
+                        _, spend_attr_df, _, _ = attr_obj.make_attribution()
 
                         total_outcome = np.sum(spend_attr_df.loc[:, [ch]].values)
                         cost_curves_dict["ch"].append(ch)
@@ -242,17 +249,14 @@ class CostCurves:
                         )
                         total_spend = np.sum(temp_df.loc[self.spend_mask, ch].values)
 
-                        attr_obj = AttributorBeta(
+                        attr_obj = AttributorGamma(
                             self.model,
                             df=temp_df,
-                            attr_regressors=[ch],
+                            logger=logger_cc,
                             start=self.spend_start,
                             end=self.spend_end,
                         )
-                        _, spend_attr_df, _, _ = attr_obj.make_attribution(
-                            true_up=False, fixed_intercept=True
-                        )
-                        # pred = self.model.predict(df=temp_df)
+                        _, spend_attr_df, _, _ = attr_obj.make_attribution()
 
                         total_outcome = np.sum(spend_attr_df.loc[:, [ch]].values)
                         cost_curves_dict["ch"].append(ch)
@@ -281,7 +285,10 @@ class CostCurves:
         plot_margin: float = 0.05,
         is_visible: bool = True,
         include_organic: bool = True,
-    ) -> None:
+        figsize: Optional[Tuple] = None,
+        frame_on: bool = False,
+        point_size: float = 160,
+    ) -> matplotlib.axes.Axes:
         """plot cost curves
 
         Args:
@@ -319,11 +326,18 @@ class CostCurves:
             y_max = max(y_max, y_max2)
 
         if self.curve_type == "individual":
+            if figsize is None:
+                figsize = (18, nrows * 4.5)
             # multiple cost curves
-            fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=(18, nrows * 4.5))
+            fig, axes = plt.subplots(nrows=nrows, ncols=2, figsize=figsize)
             axes = axes.flatten()
 
-            for idx, ch in enumerate(self.channels):
+            for idx, ch in enumerate(axes):
+                axes[idx].set_frame_on(frame_on)
+                if idx >= len(self.channels):
+                    continue
+
+                ch = self.channels[idx]
                 temp_cc = cost_curves[cost_curves["ch"] == ch].reset_index(drop=True)
                 curr_spend_mask = temp_cc["multiplier"] == 1
 
@@ -348,7 +362,7 @@ class CostCurves:
                     curr_spend,
                     curr_outcome,
                     c="orange",
-                    s=48,
+                    s=point_size,
                     label="current spend",
                 )
 
@@ -385,7 +399,7 @@ class CostCurves:
                         optim_spend,
                         optim_outcome,
                         c="green",
-                        s=48,
+                        s=point_size,
                         label="optim spend",
                     )
 
@@ -403,7 +417,10 @@ class CostCurves:
 
         elif self.curve_type == "overall":
             # single cost curve
-            fig, ax = plt.subplots(1, 1, figsize=(18, 12))
+            if figsize is None:
+                figsize = (18, 12)
+            fig, ax = plt.subplots(1, 1, figsize=figsize)
+            ax.set_frame_on(frame_on)
             temp_cc = cost_curves[cost_curves["ch"] == "overall"].reset_index(drop=True)
             curr_spend_mask = temp_cc["multiplier"] == 1
             ax.plot(
@@ -424,7 +441,7 @@ class CostCurves:
                 curr_spend,
                 curr_outcome,
                 c="orange",
-                s=48,
+                s=point_size,
                 label="current spend",
             )
 
@@ -436,7 +453,8 @@ class CostCurves:
                 )
 
             ax.set_xlim(left=0.0, right=x_max)
-
+            ax.grid(linestyle="dotted", linewidth=0.7, color="grey", alpha=0.8)
+            ax.xaxis.set_major_formatter("${x:1.0f}")
             if optim_cost_curves is not None:
                 temp_optim_cc = optim_cost_curves[
                     optim_cost_curves["ch"] == "overall"
@@ -463,7 +481,7 @@ class CostCurves:
                     optim_spend,
                     optim_outcome,
                     c="green",
-                    s=48,
+                    s=point_size,
                     label="optim spend",
                 )
 

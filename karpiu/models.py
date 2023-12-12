@@ -281,7 +281,7 @@ class MMM:
                 "damped_factor": list(np.linspace(0.9057, 0.9923, 3)),
             }
         regressors = self.fs_cols_flatten + self.event_cols + self.control_feat_cols
-        dlt_proto = DLT(
+        dlt_prototype = DLT(
             # seasonality=7,
             response_col=self.kpi_col,
             regressor_col=regressors,
@@ -300,7 +300,7 @@ class MMM:
 
         best_params, tuning_df = grid_search_orbit(
             param_grid,
-            model=dlt_proto,
+            model=dlt_prototype,
             df=transform_df,
             eval_method="bic",
             # this does not matter
@@ -606,6 +606,9 @@ class MMM:
         transform_df = self._preprocess_df(df, transform_response=False)
         pred = self._model.predict(transform_df, decompose=decompose, **kwargs)
 
+        if decompose:
+            pred["log_prediction"] = pred["prediction"]
+
         # _5 and _95 probably won't exist with median prediction for current version
         pred_tr_col = [
             x
@@ -717,7 +720,7 @@ class MMM:
         return adstock_matrix
 
     def get_max_adstock(self):
-        """Returns zero for now until we implement adstock"""
+        """Returns max adstock lag introduced in the model"""
         adstock_matrix = self.get_adstock_matrix()
         return adstock_matrix.shape[1] - 1
 
@@ -812,3 +815,16 @@ class MMM:
     def get_logger(self):
         # not a deepcopy
         return self.logger
+
+    def copy(self, suppress_adstock: bool):
+        if suppress_adstock:
+            self.logger.info("Return a clone without adstock impact.")
+            clone_wo_adstock = deepcopy(self)
+            max_adstock = self.get_max_adstock()
+            raw_df = self.get_raw_df()
+            raw_df = raw_df[max_adstock:].reset_index(drop=True)
+            clone_wo_adstock.adstock_df = None
+            clone_wo_adstock.raw_df = raw_df
+            return clone_wo_adstock
+        else:
+            return deepcopy(self)
