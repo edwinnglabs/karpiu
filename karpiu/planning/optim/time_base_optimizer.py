@@ -37,9 +37,19 @@ class TimeBudgetOptimizer(MMMShellLegacy):
         else:
             self.logger = logger
 
+        self.optim_channels = optim_channels
+        self.full_channels = model.get_spend_cols()
+        self.optim_channels_idx = list()
+        for ch in optim_channels:
+            for idx in range(len(self.full_channels)):
+                if ch == self.full_channels[idx]:
+                    self.optim_channels_idx.append(idx)
+        self.logger.info("Optimizing channels : {}".format(self.optim_channels))
+
+        # this is more for calculating all attribution required math
         super().__init__(
             model=model,
-            target_regressors=optim_channels,
+            target_regressors=self.full_channels,
             start=budget_start,
             end=budget_end,
         )
@@ -49,8 +59,6 @@ class TimeBudgetOptimizer(MMMShellLegacy):
 
         self.budget_start = self.start
         self.budget_end = self.end
-        self.optim_channels = optim_channels
-        self.logger.info("Optimizing channels : {}".format(self.optim_channels))
 
         self.response_scaler = response_scaler
         self.spend_scaler = spend_scaler
@@ -92,6 +100,10 @@ class TimeBudgetOptimizer(MMMShellLegacy):
             lb=np.zeros(self.n_budget_steps),
             ub=np.ones(self.n_budget_steps) * np.inf,
         )
+
+        self.full_channels_spend_matrix = self.df.loc[
+            self.budget_mask, self.full_channels
+        ].values
 
         # spend allocation on time dimension
         # (1, n_channels)
@@ -209,8 +221,8 @@ class TimeBudgetOptimizer(MMMShellLegacy):
         """_summary_
 
         Args:
-            df (pd.DataFrame): must contain column named as "channel" which can map with the channel index; a special
-            channel can be specified once as "total" which will be used as budget constraints instead of bounds
+            df (pd.DataFrame): df assumes each index sequentially represents the time step in optimization period; 
+            a special index can be specified once as "total" which will be used as budget constraints instead of bounds
         """
         # "date" is a reserved keyword
         self.bounds_and_constraints_df = df
@@ -263,19 +275,24 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         self.attributor = attributor
 
     def objective_func(self, spend: np.ndarray, extra_info: bool = False):
-        # spend weight(n_optim_channels, ) -> (broadcast) -> spend matrix (n_budget_steps, n_optim_channels)
-        # time-based spend (n_budget_steps, ) -> (expand_dim) -> spend matrix (n_budget_steps, n_optim_channels)
-        spend_matrix = (
+        # spend(n_budget_steps, ) -> (expand) -> spend(n_budget_steps, 1)
+        # (multiply channels weight(n_optim_channels)
+        # -> (broadcast) -> input_channel_spend_matrix (n_budget_steps, n_optim_channels)
+        input_channel_spend_matrix = (
             np.expand_dims(spend, -1)
-            # * np.ones((self.n_budget_steps, self.n_optim_channels))
             * self.weight
         )
-        zero_paddings = np.zeros((self.max_adstock, self.n_optim_channels))
-        # (n_calc_steps, n_optim_channels)
-        spend_matrix = np.concatenate(
-            [zero_paddings.copy(), spend_matrix, zero_paddings.copy()], axis=0
-        )
-        spend_matrix += self.target_regressor_bkg_matrix
+        # the full spend matrix pass into attribution calculation
+        spend_matrix = self.full_channels_spend_matrix.copy()
+        spend_matrix[:, self.optim_channels_idx] = input_channel_spend_matrix
+
+        if self.max_adstock > 0:
+            zero_paddings = np.zeros((self.max_adstock, self.n_optim_channels))
+            # (n_calc_steps, n_optim_channels)
+            spend_matrix = np.concatenate(
+                [zero_paddings.copy(), spend_matrix, zero_paddings.copy()], axis=0
+            )
+            spend_matrix += self.target_regressor_bkg_matrix
 
         target_coef_array = self.target_coef_array
         target_transformed_matrix = self.attributor._derive_target_transformed_matrix(
@@ -303,17 +320,18 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
             attr_marketing=attr_marketing,
         )
 
+        # For attribution, revenue, and cost are calculated 
+        # with all channels spend (not just the two we are optimizing) as the shape
         # (n_optim_channels, )
-        # ignore first column which is organic
-        revenue = np.sum(self.ltv_arr * np.sum(spend_attr_matrix, 0))
+        revenue = self.ltv_arr * np.sum(spend_attr_matrix, 0)
         # (n_optim_channels, )
-        cost = np.sum(spend_matrix)
-        net_profit = revenue - cost
+        cost = np.sum(spend_matrix, 0)
+        net_profit = np.sum(revenue - cost)
         loss = -1 * net_profit / self.response_scaler
         # add punishment of variance of spend; otherwise may risk of identifiability issue with adstock
         loss += self.variance_penalty * np.var(spend)
         if extra_info:
-            return revenue, cost
+            return np.sum(revenue), np.sum(cost)
         else:
             return loss
 
@@ -333,3 +351,68 @@ class TimeNetProfitMaximizer(TimeBudgetOptimizer):
         revs, costs = self.objective_func(xk, extra_info=True)
         self.callback_metrics["optim_revenues"].append(revs)
         self.callback_metrics["optim_costs"].append(costs)
+
+
+# assert budget start and and end are only two steps
+def time_based_net_profit_response_curve(t_npm: TimeNetProfitMaximizer, model:MMM, n_iters=10):
+    net_profits = np.empty((n_iters, n_iters))
+    total_budget = t_npm.total_budget
+    date_col = t_npm.date_col
+    budget_start = t_npm.budget_start
+    budget_end = t_npm.budget_end
+
+    logger = logging.getLogger('karpiu-planning-test')
+    logger.setLevel(30)
+
+    def time_based_net_profit_response(x1, x2, attributor, channels_weight, 
+        base_spend_df, optim_channels, ltv_arr
+    ) -> np.ndarray:
+        # (n_steps, n_channels)
+        input_spend_matrix = np.vstack([x1, x2]) * channels_weight    
+        temp_spend_df = base_spend_df.copy()
+        temp_spend_df.loc[
+            (temp_spend_df[date_col] >= budget_start) 
+            & (temp_spend_df[date_col] <= budget_end),
+            optim_channels
+        ] = input_spend_matrix
+        
+        attributor = AttributorGamma(
+            model=model,
+            df=temp_spend_df,
+            start=budget_start,
+            end=budget_end,
+            logger=logger,
+        )
+        _, spend_attr, _, _ = attributor.make_attribution()
+        
+        # For attribution, revenue, and cost are calculated with all channels spend (not just the two we are optimizing) as the input
+        cost = np.sum(temp_spend_df.loc[
+            (temp_spend_df[date_col] >= budget_start) 
+            & (temp_spend_df[date_col] <= budget_end),
+            # always use full channels in time-based optimization
+            model.get_spend_cols()
+        ].values)
+        
+        return np.sum(spend_attr.loc[:, model.get_spend_cols()].values * ltv_arr) - cost
+
+    x1s = total_budget * np.linspace(0, 1, n_iters)
+    x2s = total_budget * np.linspace(0, 1, n_iters)
+
+    x1s, x2s = np.meshgrid(x1s, x2s)
+
+    for i in range(n_iters):
+        for j in range(n_iters):
+            x1 = x1s[i, j]
+            x2 = x2s[i, j]
+            net_profits[i, j] = time_based_net_profit_response(
+                x1, x2, attributor=t_npm.attributor,
+                channels_weight=t_npm.weight, 
+                base_spend_df=t_npm.df,
+                optim_channels=t_npm.optim_channels, 
+                ltv_arr=t_npm.ltv_arr,
+            )
+
+    return x1s, x2s, net_profits
+
+
+
