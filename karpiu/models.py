@@ -816,7 +816,7 @@ class MMM:
         # not a deepcopy
         return self.logger
 
-    def copy(self, suppress_adstock: bool):
+    def copy(self, suppress_adstock: bool = False):
         if suppress_adstock:
             self.logger.info("Return a clone without adstock impact.")
             clone_wo_adstock = deepcopy(self)
