@@ -33,6 +33,7 @@ jobs:
           pip install -U pip
           pip install -U setuptools
           pip install -r requirements.txt
+          pip install -r requirements-test.txt
           python -m pip install -e .
       - name: Test and create core models in pytest
         run: pytest -vs tests/tests_first/  --cov=karpiu --cov-report term-missing
