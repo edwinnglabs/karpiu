@@ -1,5 +1,4 @@
-[![build](https://github.com/edwinnglabs/karpiu/actions/workflows/build.yaml/badge.svg?event=push)](https://github.com/edwinnglabs/karpiu/actions/workflows/build.yaml)
-[![format](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml/badge.svg?event=push)](https://github.com/edwinnglabs/karpiu/actions/workflows/format.yaml)
+[![build](https://github.com/edwinnglabs/karpiu/actions/workflows/build.yaml/badge.svg?event=push)](https://github.com/edwinnglabs/karpiu/actions/workflows/format_and_test.yaml)
 [![pages](https://github.com/edwinnglabs/karpiu/actions/workflows/pages.yaml/badge.svg?branch=main)](https://github.com/edwinnglabs/karpiu/actions/workflows/pages.yaml)
 # Karpiu
 
