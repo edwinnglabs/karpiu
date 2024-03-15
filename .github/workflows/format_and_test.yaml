@@ -1,13 +1,23 @@
-name: build
+name: lint and test
 
 on: [push]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: psf/black@stable
+        with:
+          options: "--check --verbose --color"
+          jupyter: false
+
   build:
     runs-on: ubuntu-latest
+    needs: lint
     strategy:
       matrix:
-        python-version: [3.8]
+        python-version: [3.11]
 
     steps:
       - uses: actions/checkout@v2
@@ -20,12 +30,10 @@ jobs:
         run: python -c "import sys; print(sys.version)"
       - name: Install dependencies
         run: |
-          pip install cmdstanpy
+          pip install -U pip
+          pip install -U setuptools
           pip install -r requirements.txt
-          pip install poetry
-          pip install -r requirements-test.txt
-          pip install -r requirements-docs.txt
-          python setup.py develop
+          python -m pip install -e .
       - name: Test and create core models in pytest
         run: pytest -vs tests/tests_first/  --cov=karpiu --cov-report term-missing
       - name: Test the rest in pytest

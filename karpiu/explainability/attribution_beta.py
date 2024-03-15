@@ -220,9 +220,9 @@ class AttributorBeta(MMMShellLegacy):
         activities_attr_df = pd.DataFrame(
             {date_col: self.df[self.input_mask][date_col].values}
         )
-        activities_attr_df[
-            ["organic"] + self.target_regressors
-        ] = activities_attr_matrix
+        activities_attr_df[["organic"] + self.target_regressors] = (
+            activities_attr_matrix
+        )
 
         spend_attr_df = pd.DataFrame(
             {date_col: self.df[self.input_mask][date_col].values}

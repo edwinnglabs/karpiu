@@ -157,3 +157,6 @@ poetry.lock
 *.pkl
 *.gif
 *.jpeg
+
+# github
+!.github/

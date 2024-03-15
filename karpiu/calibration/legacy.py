@@ -1,6 +1,7 @@
 """
 Legacy code here; Plan to deprecate soon.
 """
+
 import scipy.optimize as optim
 import numpy as np
 import pandas as pd
@@ -240,9 +241,9 @@ def calibrate_model_with_test(
                     )
                 )
                 logger.info("Reduced sigma priors:{}".format(tighter_sigma_prior))
-                curr_priors_full.loc[
-                    haircut_test_names, "sigma_prior"
-                ] = tighter_sigma_prior
+                curr_priors_full.loc[haircut_test_names, "sigma_prior"] = (
+                    tighter_sigma_prior
+                )
 
             # reset index for proper usage in other stages
             curr_priors_full = curr_priors_full.reset_index()
