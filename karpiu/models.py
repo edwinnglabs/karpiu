@@ -156,7 +156,9 @@ class MMM:
         if adstock_df is not None:
             for x in spend_cols:
                 if x not in self.adstock_df.index.tolist():
-                    raise ("Spend channel {} is not included in adstock.".format(x))
+                    raise Exception(
+                        "Spend channel {} is not included in adstock.".format(x)
+                    )
 
         self.regression_scheme = None
         self.best_params = {}
