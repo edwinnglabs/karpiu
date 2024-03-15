@@ -1,4 +1,5 @@
-name: lint and test
+name: build
+# lint and run unit tests
 
 on: [push]
 
@@ -12,7 +13,7 @@ jobs:
           options: "--check --verbose --color"
           jupyter: false
 
-  build:
+  test:
     runs-on: ubuntu-latest
     needs: lint
     strategy:
