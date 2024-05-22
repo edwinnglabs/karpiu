@@ -47,6 +47,7 @@ class MMM:
         fs_orders: Optional[List[int]] = None,
         total_market_sigma_prior: float = None,
         default_spend_sigma_prior: float = 0.1,
+        global_trend_sigma_prior: float = 0.001,
         logger: Optional[logging.Logger] = None,
         fit_args: Optional[Dict[str, float]] = None,
         **kwargs
@@ -82,6 +83,7 @@ class MMM:
 
         self.spend_cols = deepcopy(spend_cols)
         self.default_spend_sigma_prior = default_spend_sigma_prior
+        self.global_trend_sigma_prior = global_trend_sigma_prior
         self.spend_cols.sort()
         # self.scalability_df = scalability_df
 
@@ -212,7 +214,7 @@ class MMM:
             num_sample=num_sample,
             chains=chains,
             # use small sigma for global trend as this is a long-term daily model
-            global_trend_sigma_prior=0.001,
+            global_trend_sigma_prior=self.global_trend_sigma_prior,
             # **self.best_params,
             **kwargs,
         )
@@ -296,7 +298,7 @@ class MMM:
             estimator="stan-map",
             verbose=False,
             # use small sigma for global trend as this is a long-term daily model
-            global_trend_sigma_prior=0.001,
+            global_trend_sigma_prior=self.global_trend_sigma_prior,
             **kwargs,
         )
 
@@ -505,7 +507,7 @@ class MMM:
             num_sample=num_sample,
             chains=chains,
             # use small sigma for global trend as this is a long-term daily model
-            global_trend_sigma_prior=0.001,
+            global_trend_sigma_prior=self.global_trend_sigma_prior,
             **self.best_params,
             **kwargs,
         )
@@ -566,7 +568,7 @@ class MMM:
                 num_sample=num_sample,
                 chains=chains,
                 # use small sigma for global trend as this is a long-term daily model
-                global_trend_sigma_prior=0.001,
+                global_trend_sigma_prior=self.global_trend_sigma_prior,
                 **self.best_params,
                 **kwargs,
             )
