@@ -2,16 +2,16 @@
 [![pages](https://github.com/edwinnglabs/karpiu/actions/workflows/pages.yaml/badge.svg?branch=main)](https://github.com/edwinnglabs/karpiu/actions/workflows/pages.yaml)
 # Karpiu
 
-**Karpiu** is a package designed for Marketing Mix Modeling (MMM) by calling [Orbit](https://github.com/uber/orbit) from the backend. Karpiu is still in its beta version.  Please use it at your own risk.
+**Karpiu** is a package designed for Marketing Mix Modeling (MMM) by calling [Orbit](https://github.com/uber/orbit) from the backend. Karpiu is still in beta, please use it at your own risk.
 
 # Tutorials & Documentation
 
-For usage, users can refer to this [documentation](https://edwinng.com/karpiu/).
+For usage, please refer to this [documentation](https://edwinng.com/karpiu/).
 
 # Installation
 
-To access the development version, please follow the below instructions or simply use `make install-dev` 
-after cloning the repository.  The package only supports`orbit>=1.1.4` which requires `cmdstanpy`. 
+To access the development version, please follow the instructions below or use `make install-dev` 
+after cloning the repository. This package only supports `orbit>=1.1.4` which requires `cmdstanpy`. 
 
 ```bash
 $ git clone https://github.com/edwinnglabs/karpiu.git
@@ -29,11 +29,11 @@ $ pip install -e .
 
 ## Codebase
 
-1. [Robyn](https://github.com/facebookexperimental/Robyn) - Robyn is an automated Marketing Mix Modeling (MMM) code. It aims to reduce human bias by means of ridge regression and evolutionary algorithms, enables actionable decision making providing a budget allocator and diminishing returns curves and allows ground-truth calibration to account for causation.
+1. [Robyn](https://github.com/facebookexperimental/Robyn) - Robyn is an automated Marketing Mix Modeling (MMM) package. It aims to reduce human bias by means of ridge regression and evolutionary algorithms. It enables actionable decision making, provides a budget allocator, diminishing returns curves and allows ground-truth calibration to account for causation.
 
 2. [Lightweight (Bayesian) Marketing Mix Modeling](https://github.com/google/lightweight_mmm) - LMMM is a python library that helps organisations understand and optimise marketing spend across media channels.
 
-3. [Orbit](https://github.com/uber/orbit) - A Python package for Bayesian forecasting with object-oriented design and probabilistic models under the hood.
+3. [Orbit](https://github.com/uber/orbit) - A Python package for Bayesian forecasting with an object-oriented design and probabilistic models under the hood.
 
 ## Research
 - [Ng, E., Wang, Z. & Dai, A. (2021). Bayesian Time Varying Coefficient Model with Applications to
@@ -52,4 +52,4 @@ by Benjamin Vincent.
 
 # Fun Fact
 
-**Karpiu** is a term invented the author's daugther while she just reached her terrible two. In the early development of this project, "Karpiu" became the dominating term in the author's home office. The author later dedicated this term to the package.
+**Karpiu** is a term invented by the author's daugther when she had just reached her terrible two's. In the early development of this project, "Karpiu" became the dominating term in the author's home office. The author later dedicated this term to the package.
